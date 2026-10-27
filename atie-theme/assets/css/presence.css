@@ -86,10 +86,12 @@
 .presence-card__media img,
 .presence-card__face,
 .presence-card__face svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.presence-card__media video { position: absolute; inset: 0; width: 100%; height: 100%; display: block; object-fit: cover; object-position: 50% 18%; transition: transform .5s ease; }
 .presence-card__media img { object-fit: cover; object-position: 50% 18%; transition: transform .5s ease; }
 .presence-card__face { --sand: #26262a; }
 .presence-card__face .lid { display: none; }
-.presence-card:hover .presence-card__media img { transform: scale(1.04); }
+.presence-card:hover .presence-card__media img,
+.presence-card:hover .presence-card__media video { transform: scale(1.04); }
 .presence-card__info {
 	position: absolute; left: 0; right: 0; bottom: 0; z-index: 2;
 	padding: 64px 20px 20px;
@@ -173,5 +175,5 @@
 	.presence-card--custom { aspect-ratio: auto; min-height: 260px; }
 }
 @media (prefers-reduced-motion: reduce) {
-	.presence-card__media img, .presence-action { transition: none; }
+	.presence-card__media img, .presence-card__media video, .presence-action { transition: none; }
 }

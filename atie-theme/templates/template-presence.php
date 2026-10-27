@@ -116,7 +116,9 @@ while ( have_posts() ) :
 								<span class="screen-reader-text"><?php echo esc_html( sprintf( /* translators: %s: receptionist name. */ __( 'Essayer avec %s', 'atie' ), $persona['name'] ) ); ?></span>
 							</button>
 							<div class="presence-card__media">
-								<?php if ( $persona['image'] ) : ?>
+								<?php if ( $persona['video'] ) : ?>
+									<video src="<?php echo esc_url( $persona['video'] ); ?>" poster="<?php echo esc_url( $persona['image'] ); ?>" muted loop playsinline autoplay preload="metadata" aria-hidden="true" width="416" height="672"></video>
+								<?php elseif ( $persona['image'] ) : ?>
 									<img src="<?php echo esc_url( $persona['image'] ); ?>" alt="<?php echo esc_attr( sprintf( /* translators: %s: receptionist name. */ __( 'Portrait de %s, réceptionniste fictive', 'atie' ), $persona['name'] ) ); ?>" loading="lazy" width="900" height="1221">
 								<?php else : ?>
 									<div class="presence-card__face" data-presence-face="<?php echo esc_attr( $persona['variant'] ); ?>" aria-hidden="true"></div>

@@ -9,7 +9,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'ATIE_VERSION', '1.3.0' );
+define( 'ATIE_VERSION', '1.4.0' );
 define( 'ATIE_DIR', get_template_directory() );
 define( 'ATIE_URI', get_template_directory_uri() );
 

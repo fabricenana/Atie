@@ -10,7 +10,7 @@
  *   data-avatar-name     Nom affiché (défaut « Léa »)
  *   data-avatar-image    Image fixe de l'avatar (remplace le dessin animé de substitution)
  *   data-avatar-variant  Dessin de substitution : lea | marco (défaut lea)
- *   data-idle-src        Boucle vidéo idle (WebM/MP4) — absente : avatar SVG de substitution
+ *   data-idle-src        Boucle vidéo idle (WebM/MP4), prioritaire ; data-avatar-image sert d'affiche
  *   data-poster          Image fixe de repli (réseau en échec, économie de données, reduced motion)
  *   data-position        right | left (défaut right)
  *   data-offset-bottom   marge basse en px (défaut 20) — à augmenter pour éviter bandeaux/boutons existants
@@ -214,12 +214,12 @@
 
   function attr(v) { return String(v).replace(/[&"<>]/g, function (c) { return { '&': '&amp;', '"': '&quot;', '<': '&lt;', '>': '&gt;' }[c]; }); }
   function media() {
-    if (cfg.image) return '<img class="media" alt="" src="' + attr(cfg.image) + '">';
-    if (cfg.idleSrc) {
-      return '<video class="media" muted loop playsinline preload="metadata"' + (cfg.poster ? ' poster="' + attr(cfg.poster) + '"' : '') +
+    var still = cfg.image || cfg.poster;
+    if (cfg.idleSrc && !(reduceMotion || saveData)) {
+      return '<video class="media" muted loop playsinline preload="metadata"' + (still ? ' poster="' + attr(still) + '"' : '') +
         ' src="' + attr(cfg.idleSrc) + '" aria-hidden="true"></video>';
     }
-    if (cfg.poster && (reduceMotion || saveData)) return '<img class="media" alt="" src="' + attr(cfg.poster) + '">';
+    if (still) return '<img class="media" alt="" src="' + attr(still) + '">';
     return face(cfg.variant);
   }
 
@@ -509,7 +509,7 @@
   // Change d'avatar (nom, image, dessin) hors conversation : la page peut présenter plusieurs réceptionnistes.
   function setPersona(p) {
     if (S || !p) return false;
-    cfg.name = p.name || cfg.name; cfg.image = p.image || ''; cfg.variant = p.variant === 'marco' ? 'marco' : 'lea';
+    cfg.name = p.name || cfg.name; cfg.image = p.image || ''; cfg.idleSrc = p.video || ''; cfg.variant = p.variant === 'marco' ? 'marco' : 'lea';
     [bubble, stage].forEach(function (box) {
       var old = box.querySelector(':scope > .face, :scope > .media');
       var tmp = document.createElement('div'); tmp.innerHTML = media();
@@ -517,6 +517,7 @@
       if ((reduceMotion || saveData) && el.classList.contains('face')) el.classList.add('still');
     });
     bubbleMedia = bubble.querySelector('.face, video, img');
+    setIdle(visible && tabOn);
     clearTimers(); caps.textContent = ''; caps.classList.remove('on'); setState('');
     emit('atie:persona', { name: cfg.name });
     return true;
