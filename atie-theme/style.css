@@ -1,0 +1,21 @@
+/*
+Theme Name: ATIE
+Theme URI: https://atie.ch/
+Author: ATIE
+Author URI: https://atie.ch/
+Description: Thème WordPress natif d'ATIE — agence digitale (sites web, applications, web-marketing, IA). Thème classique, responsive, sans Divi. Compatible WooCommerce, Forminator, Rank Math, Site Kit.
+Version: 1.0.5
+Requires at least: 6.5
+Tested up to: 7.0
+Requires PHP: 8.0
+License: GNU General Public License v2 or later
+License URI: http://www.gnu.org/licenses/gpl-2.0.html
+Text Domain: atie
+Tags: custom-post-type, portfolio, business, translation-ready, woocommerce
+*/
+
+/*
+  Les styles de présentation sont chargés depuis assets/css/main.css
+  (voir inc/enqueue.php). Ce fichier ne contient que l'en-tête du thème,
+  requis par WordPress.
+*/
