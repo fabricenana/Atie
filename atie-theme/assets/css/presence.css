@@ -1,121 +1,177 @@
 /* =========================================================================
    ATIE Presence — page template (templates/template-presence.php)
-   Uses the tokens of main.css (--red, --ink, --muted, --card, fonts).
+   Dark product showcase. Accent stays the ATIE red; fonts from main.css.
    ========================================================================= */
 
-.btn--ghost {
-	background: var(--card); color: var(--ink);
-	box-shadow: inset 0 0 0 1.5px var(--ink);
+.atie-presence-dark {
+	--p-bg: #0e0e0f;
+	--p-panel: #161618;
+	--p-card: #1b1b1e;
+	--p-line: rgba(255, 255, 255, 0.08);
+	--p-text: #f4f4f5;
+	--p-muted: #a1a1aa;
+	--p-faint: #71717a;
+	background: var(--p-bg);
+	color: var(--p-text);
 }
-.btn--ghost:hover { background: var(--ink); color: #fff; }
-.btn:focus-visible { outline: 3px solid var(--red); outline-offset: 3px; }
 
-/* ---- Hero -------------------------------------------------------------- */
-.presence-hero { text-align: center; padding-top: clamp(32px, 8vh, 96px); }
-.presence-hero__title {
-	margin: 10px auto 0; max-width: 900px;
-	font-weight: 700; color: var(--red);
-	font-size: clamp(34px, 5.4vw, 72px); line-height: 1.04; text-wrap: balance;
+/* ---- Site header on the dark page ------------------------------------- */
+.atie-presence-dark .site-header { background: rgba(14, 14, 15, 0.86); backdrop-filter: blur(8px); border-bottom: 1px solid var(--p-line); box-shadow: none; }
+.atie-presence-dark .main-nav__list a { color: var(--p-text); }
+.atie-presence-dark .main-nav__list a:hover,
+.atie-presence-dark .main-nav__list .current-menu-item > a { color: var(--red); }
+.atie-presence-dark .nav-toggle__bar { background: var(--p-text); }
+.atie-presence-dark .site-header__brand img { filter: drop-shadow(0 0 1px rgba(255, 255, 255, 0.35)); }
+@media (max-width: 860px) {
+	.atie-presence-dark .site-header { background: var(--p-bg); }
+	.atie-presence-dark .main-nav { background: var(--p-panel); border-bottom-color: var(--p-line); }
+	/* The closed menu is only shifted by 130% of its height: hide it fully so no link peeks under the header. */
+	.atie-presence-dark .main-nav:not(.is-open) { visibility: hidden; transition: transform .28s ease, visibility 0s linear .28s; }
+	.atie-presence-dark .main-nav__list li { border-top-color: var(--p-line); }
 }
-.presence-hero__lead {
-	margin: 18px auto 0; max-width: 640px;
-	font-weight: 500; font-size: clamp(15px, 1.7vw, 19px); line-height: 1.55;
-	color: var(--ink); opacity: 0.78; text-wrap: balance;
-}
-.presence-hero__actions {
-	margin-top: 28px; display: flex; flex-wrap: wrap; gap: 12px; justify-content: center;
-}
-.presence-hero__note { margin: 14px 0 0; font-size: 13px; color: var(--muted); }
 
-/* ---- Receptionists ----------------------------------------------------- */
-.presence-avatars .presence-hero__note { text-align: center; margin-top: 22px; }
-.presence-avatars__grid {
-	display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: clamp(16px, 2vw, 28px);
-	max-width: 980px; margin: 0 auto;
+/* ---- Shared ------------------------------------------------------------ */
+.presence { padding-bottom: clamp(60px, 10vh, 120px); }
+.presence-wrap { width: 100%; max-width: 1240px; margin: 0 auto; padding: 0 clamp(20px, 4.5vw, 64px); }
+.presence-kicker {
+	display: inline-block; font-family: var(--font-ui); font-weight: 600; font-size: 12px;
+	letter-spacing: 0.22em; text-transform: uppercase; color: var(--red);
 }
-.presence-avatar {
-	display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
-	background: var(--card); border: 1px solid rgba(20, 20, 20, 0.08); border-radius: 18px; overflow: hidden;
-	box-shadow: 0 18px 40px rgba(20, 20, 20, 0.08);
+.presence-h2 { font-size: clamp(22px, 2.4vw, 30px); font-weight: 600; letter-spacing: -0.01em; color: var(--p-text); }
+.presence-note { margin: 18px 0 0; font-size: 13px; color: var(--p-faint); }
+.presence a:focus-visible,
+.presence button:focus-visible { outline: 3px solid var(--red); outline-offset: 3px; }
+
+/* ---- Welcome + action cards ------------------------------------------- */
+.presence-welcome { padding: clamp(40px, 9vh, 104px) 0 clamp(36px, 6vh, 64px); }
+.presence-welcome__title {
+	margin-top: 12px; max-width: 900px;
+	font-size: clamp(32px, 4.6vw, 58px); font-weight: 600; line-height: 1.05; color: var(--p-text); text-wrap: balance;
 }
-.presence-avatar__visual { position: relative; background: #e9e3dc; min-height: 260px; }
-.presence-avatar__visual img,
-.presence-avatar__face,
-.presence-avatar__face svg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
-.presence-avatar__face { --sand: #e9e3dc; } /* the drawing uses the widget tokens; --ink comes from main.css */
-.presence-avatar__body { padding: clamp(18px, 2vw, 26px); display: flex; flex-direction: column; gap: 6px; }
-.presence-avatar__name { font-size: 26px; font-weight: 700; color: var(--ink); }
-.presence-avatar__role { margin: 0; font-family: var(--font-ui); font-weight: 600; font-size: 13px; letter-spacing: 0.04em; color: var(--red); }
-.presence-avatar__company { margin: 0; font-size: 13px; color: var(--faint); }
-.presence-avatar__text { margin: 8px 0 0; font-size: 14.5px; line-height: 1.55; color: var(--ink); }
-.presence-avatar__tone { margin: 0; font-size: 13.5px; color: var(--muted); font-style: italic; }
-.presence-avatar__langs { list-style: none; margin: 8px 0 0; padding: 0; display: flex; gap: 6px; flex-wrap: wrap; }
-.presence-avatar__langs li {
-	font-family: var(--font-ui); font-weight: 600; font-size: 11.5px; letter-spacing: 0.08em;
-	padding: 4px 9px; border-radius: 999px; background: rgba(227, 30, 36, 0.08); color: var(--red);
+.presence-welcome__lead { margin: 14px 0 0; max-width: 640px; font-size: clamp(15px, 1.5vw, 18px); color: var(--p-muted); }
+
+.presence-actions { margin-top: clamp(28px, 4vh, 44px); display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+.presence-action {
+	display: flex; flex-direction: column; align-items: flex-start; gap: 18px;
+	padding: 24px; border-radius: 18px; background: var(--p-panel); border: 1px solid var(--p-line);
+	color: var(--p-text); text-decoration: none; font: inherit; text-align: left; cursor: pointer;
+	transition: border-color .2s ease, transform .2s ease, background .2s ease;
 }
-.presence-avatar__langs { margin-bottom: 18px; }
-.presence-avatar__try { margin-top: auto; align-self: flex-start; }
-.presence-avatar__face .lid { display: none; } /* eyelids are only animated inside the widget */
+.presence-action:hover { border-color: rgba(255, 255, 255, 0.2); background: #1c1c1f; transform: translateY(-2px); }
+.presence-action__icon {
+	width: 52px; height: 52px; border-radius: 14px; display: grid; place-items: center; color: #fff;
+}
+.presence-action__icon--red { background: linear-gradient(160deg, #ff4a4f, var(--red)); }
+.presence-action__icon--green { background: linear-gradient(160deg, #4cd964, #22a33a); }
+.presence-action__icon--blue { background: linear-gradient(160deg, #3d9bff, #1567e0); }
+.presence-action__label { font-family: var(--font-ui); font-weight: 500; font-size: 16px; }
+
+.presence-intro { margin-top: 32px; max-width: 760px; color: var(--p-muted); }
+.presence-intro a { color: var(--p-text); }
+
+/* ---- Featured receptionists ------------------------------------------- */
+.presence-featured { padding: clamp(28px, 5vh, 56px) 0; scroll-margin-top: 110px; }
+.presence-featured__head { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-bottom: 20px; }
+.presence-link { font-family: var(--font-ui); font-weight: 500; color: var(--p-text); text-decoration: none; }
+.presence-link:hover { color: var(--red); }
+
+.presence-gallery { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+.presence-card {
+	position: relative; display: block; aspect-ratio: 2 / 3; border-radius: 22px; overflow: hidden;
+	background: var(--p-card); border: 1px solid var(--p-line); color: var(--p-text); text-decoration: none;
+	isolation: isolate;
+}
+.presence-card__hit { position: absolute; inset: 0; z-index: 3; width: 100%; border: 0; padding: 0; background: transparent; cursor: pointer; border-radius: inherit; }
+.presence-card__media,
+.presence-card__media img,
+.presence-card__face,
+.presence-card__face svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.presence-card__media img { object-fit: cover; object-position: 50% 18%; transition: transform .5s ease; }
+.presence-card__face { --sand: #26262a; }
+.presence-card__face .lid { display: none; }
+.presence-card:hover .presence-card__media img { transform: scale(1.04); }
+.presence-card__info {
+	position: absolute; left: 0; right: 0; bottom: 0; z-index: 2;
+	padding: 64px 20px 20px;
+	background: linear-gradient(to top, rgba(10, 10, 11, 0.94) 0%, rgba(10, 10, 11, 0.72) 55%, rgba(10, 10, 11, 0) 100%);
+}
+.presence-card__langs { list-style: none; margin: 0 0 10px; padding: 0; display: flex; gap: 6px; flex-wrap: wrap; }
+.presence-card__langs li {
+	font-family: var(--font-ui); font-weight: 600; font-size: 11px; letter-spacing: 0.08em;
+	padding: 3px 8px; border-radius: 999px; background: rgba(255, 255, 255, 0.12); color: #fff;
+}
+.presence-card__name { display: block; font-size: 26px; font-weight: 600; color: #fff; }
+.presence-card__role { margin: 4px 0 0; font-family: var(--font-ui); font-size: 13.5px; font-weight: 500; color: #fff; }
+.presence-card__role span { color: var(--p-muted); font-weight: 400; }
+.presence-card__text { display: block; margin: 8px 0 0; font-size: 14px; line-height: 1.5; color: #d4d4d8; }
+.presence-card__try {
+	display: inline-flex; margin-top: 14px; padding: 9px 16px; border-radius: 999px;
+	background: var(--red); color: #fff; font-family: var(--font-ui); font-weight: 600; font-size: 13.5px;
+	transition: background .2s ease;
+}
+.presence-card:hover .presence-card__try { background: var(--red-dark); }
+
+.presence-card--custom {
+	display: flex; flex-direction: column; justify-content: center; align-items: flex-start; gap: 10px; padding: 28px;
+	background: var(--p-panel); border: 1px dashed rgba(255, 255, 255, 0.22); transition: border-color .2s ease, background .2s ease;
+}
+.presence-card--custom:hover { border-color: var(--red); background: #1c1c1f; }
+.presence-card__plus {
+	width: 56px; height: 56px; border-radius: 16px; display: grid; place-items: center;
+	background: rgba(255, 255, 255, 0.08); color: #fff; font-size: 30px; line-height: 1; margin-bottom: 8px;
+}
+.presence-card--custom .presence-card__text { color: var(--p-muted); }
+.presence-card--custom .presence-card__try { background: transparent; box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, 0.4); }
+.presence-card--custom:hover .presence-card__try { background: var(--red); box-shadow: none; }
 
 /* ---- Steps ------------------------------------------------------------- */
+.presence-steps { padding: clamp(40px, 7vh, 80px) 0 clamp(20px, 3vh, 32px); }
 .presence-steps__list {
-	list-style: none; margin: 0; padding: 0;
-	display: grid; grid-template-columns: repeat(3, 1fr); gap: clamp(14px, 1.6vw, 22px);
+	list-style: none; margin: 20px 0 0; padding: 0;
+	display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px;
 }
-.presence-step {
-	background: rgba(255, 255, 255, 0.72); border: 1px solid var(--line); border-radius: 16px;
-	padding: clamp(18px, 2vw, 26px); backdrop-filter: blur(3px);
-}
+.presence-step { padding: 24px; border-radius: 18px; background: var(--p-panel); border: 1px solid var(--p-line); }
 .presence-step__num {
-	display: inline-flex; align-items: center; justify-content: center;
-	width: 38px; height: 38px; border-radius: 50%;
-	background: var(--red); color: #fff; font-family: var(--font-ui); font-weight: 700;
+	display: inline-grid; place-items: center; width: 36px; height: 36px; border-radius: 50%;
+	background: rgba(227, 30, 36, 0.16); color: #ff5a5f; font-family: var(--font-ui); font-weight: 700;
 }
-.presence-step__title { margin-top: 14px; font-size: 18px; font-weight: 600; }
-.presence-step__text { margin: 8px 0 0; font-size: 14.5px; line-height: 1.55; color: var(--muted); }
-
-/* ---- Features ---------------------------------------------------------- */
-.presence-features__grid {
-	display: grid; grid-template-columns: repeat(4, 1fr); gap: clamp(14px, 1.6vw, 22px);
-}
-.presence-feature:hover { transform: none; box-shadow: 0 6px 20px rgba(20, 20, 20, 0.05); }
+.presence-step__title { margin-top: 14px; font-size: 18px; font-weight: 600; color: var(--p-text); }
+.presence-step__text { margin: 8px 0 0; font-size: 14.5px; line-height: 1.55; color: var(--p-muted); }
 
 /* ---- Trust ------------------------------------------------------------- */
+.presence-trust { padding: clamp(28px, 5vh, 56px) 0; }
 .presence-trust__box {
-	display: grid; grid-template-columns: 1fr 1.3fr; gap: clamp(20px, 4vw, 56px); align-items: center;
-	background: var(--ink); color: #fff; border-radius: 22px; padding: clamp(24px, 4vw, 52px);
+	display: grid; grid-template-columns: 1fr 1.4fr; gap: clamp(20px, 4vw, 56px); align-items: center;
+	padding: clamp(24px, 4vw, 48px); border-radius: 22px;
+	background: radial-gradient(120% 140% at 0% 0%, rgba(227, 30, 36, 0.18), rgba(227, 30, 36, 0) 55%), var(--p-panel);
+	border: 1px solid var(--p-line);
 }
-.presence-trust__box .section-title { color: #fff; }
-.presence-trust__list {
-	list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 14px 24px;
-}
-.presence-trust__list li {
-	position: relative; padding-left: 22px; font-size: 14.5px; line-height: 1.5; color: rgba(255, 255, 255, 0.86);
-}
+.presence-trust__list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 14px 24px; }
+.presence-trust__list li { position: relative; padding-left: 22px; font-size: 14.5px; line-height: 1.5; color: #d4d4d8; }
 .presence-trust__list li::before {
-	content: ""; position: absolute; left: 0; top: 0.45em;
-	width: 8px; height: 8px; background: var(--red); transform: rotate(45deg);
+	content: ""; position: absolute; left: 0; top: 0.45em; width: 8px; height: 8px; background: var(--red); transform: rotate(45deg);
 }
 
 /* ---- Closing call to action ------------------------------------------- */
-.presence-cta { text-align: center; padding-bottom: clamp(80px, 14vh, 160px); }
-.presence-cta__text { margin: 12px auto 0; max-width: 560px; color: var(--muted); }
+.presence-cta { padding-top: clamp(40px, 7vh, 80px); text-align: center; }
+.presence-cta__text { margin: 12px auto 24px; max-width: 560px; color: var(--p-muted); }
 
 /* ---- Responsive -------------------------------------------------------- */
 @media (max-width: 1024px) {
-	.presence-features__grid { grid-template-columns: repeat(2, 1fr); }
-	.presence-avatars__grid { grid-template-columns: 1fr; max-width: 620px; }
-}
-@media (max-width: 480px) {
-	.presence-avatar { grid-template-columns: 1fr; }
-	.presence-avatar__visual { min-height: 0; aspect-ratio: 1 / 1; }
-	.presence-avatar__try { align-self: stretch; justify-content: center; }
+	.presence-gallery { grid-template-columns: repeat(2, 1fr); }
 }
 @media (max-width: 760px) {
+	.presence-actions,
 	.presence-steps__list,
-	.presence-features__grid,
 	.presence-trust__box,
 	.presence-trust__list { grid-template-columns: 1fr; }
-	.presence-hero__actions .btn { flex: 1 1 100%; justify-content: center; }
+	.presence-action { flex-direction: row; align-items: center; padding: 16px; }
+	.presence-action__icon { width: 44px; height: 44px; flex: none; }
+}
+@media (max-width: 560px) {
+	.presence-gallery { grid-template-columns: 1fr; }
+	.presence-card--custom { aspect-ratio: auto; min-height: 260px; }
+}
+@media (prefers-reduced-motion: reduce) {
+	.presence-card__media img, .presence-action { transition: none; }
 }

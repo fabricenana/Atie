@@ -153,7 +153,7 @@
     /* bulle */
     '.bubble{position:relative;display:block;width:96px;height:96px;padding:0;border:3px solid var(--ink);border-radius:50%;background:var(--sand);overflow:hidden;box-shadow:4px 4px 0 var(--ink);transition:transform .2s,box-shadow .2s}' +
     '.bubble:hover,.bubble:focus-visible{transform:translate(-2px,-2px);box-shadow:var(--crisp)}' +
-    '.bubble .media,.panel .media{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}' +
+    '.bubble .media,.panel .media{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:50% 18%}' +
     '.bubble .dot{position:absolute;right:8px;bottom:8px;width:14px;height:14px;border-radius:50%;background:var(--ok);border:2px solid var(--paper)}' +
     '.invite{position:absolute;bottom:calc(100% + 12px);white-space:nowrap;background:var(--paper);border:2px solid var(--ink);box-shadow:3px 3px 0 var(--ink);padding:8px 12px;font-weight:600;font-size:14px;opacity:0;transform:translateY(4px);pointer-events:none;transition:opacity .2s,transform .2s}' +
     ':host(.right) .invite{right:0}:host(.left) .invite{left:0}' +

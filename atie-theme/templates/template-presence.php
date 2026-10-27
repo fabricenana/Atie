@@ -3,7 +3,9 @@
  * Template Name: ATIE Presence
  *
  * Landing page for ATIE Presence, the animated AI receptionist for websites.
- * The page content (editor) is shown under the hero when it is not empty.
+ * Dark "product showcase" layout: welcome, three action cards, featured
+ * receptionists as large portraits, then how it works and trust.
+ * The page content (editor) is shown under the welcome when it is not empty.
  * The receptionist widget runs in simulated demo mode here: no microphone,
  * no network call, no paid session (see inc/presence.php).
  *
@@ -15,6 +17,33 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 get_header();
+
+$contact  = atie_presence_contact_url();
+$personas = atie_presence_personas();
+
+$actions = array(
+	array(
+		'tone'  => 'red',
+		'icon'  => '<path d="M12 5v14M5 12h14"/>',
+		'label' => __( 'Créer votre réceptionniste', 'atie' ),
+		'href'  => $contact,
+		'open'  => false,
+	),
+	array(
+		'tone'  => 'green',
+		'icon'  => '<circle cx="9" cy="8" r="3.2"/><path d="M3.5 19c.6-3.2 2.8-5 5.5-5s4.9 1.8 5.5 5"/><circle cx="17" cy="9" r="2.4"/><path d="M15.8 14.2c2.4.1 4.1 1.7 4.7 4.3"/>',
+		'label' => __( 'Voir les réceptionnistes', 'atie' ),
+		'href'  => '#receptionnistes',
+		'open'  => false,
+	),
+	array(
+		'tone'  => 'blue',
+		'icon'  => '<rect x="4" y="5" width="16" height="14" rx="2.5"/><path d="M8 10l2.5 2L8 14M12.5 14H16"/>',
+		'label' => __( 'Essayer la démonstration', 'atie' ),
+		'href'  => '',
+		'open'  => true,
+	),
+);
 
 $steps = array(
 	array(
@@ -31,29 +60,6 @@ $steps = array(
 	),
 );
 
-$features = array(
-	array(
-		'icon'  => 'ia',
-		'title' => __( 'Un visage pour votre accueil', 'atie' ),
-		'text'  => __( 'Un avatar vidéo animé, à l’image de votre marque, qui écoute, réfléchit et répond.', 'atie' ),
-	),
-	array(
-		'icon'  => 'web',
-		'title' => __( 'Quatre langues', 'atie' ),
-		'text'  => __( 'Français, allemand, italien et anglais : le visiteur choisit sa langue en un clic.', 'atie' ),
-	),
-	array(
-		'icon'  => 'support',
-		'title' => __( 'Vos informations, pas d’invention', 'atie' ),
-		'text'  => __( 'Horaires, services, contacts : elle s’appuie sur ce que vous lui confiez et passe la main à votre équipe au besoin.', 'atie' ),
-	),
-	array(
-		'icon'  => 'mobile',
-		'title' => __( 'Ordinateur et mobile', 'atie' ),
-		'text'  => __( 'Un panneau compact sur ordinateur, plein écran sur téléphone, sans gêner la navigation.', 'atie' ),
-	),
-);
-
 $trust = array(
 	__( 'Micro activé seulement après accord du visiteur', 'atie' ),
 	__( 'Conversation non enregistrée par défaut', 'atie' ),
@@ -67,127 +73,117 @@ while ( have_posts() ) :
 	the_post();
 	?>
 
-	<section class="page-section presence-hero">
-		<div class="container">
-			<span class="section-eyebrow"><?php esc_html_e( 'ATIE Presence', 'atie' ); ?></span>
-			<h1 class="presence-hero__title"><?php the_title(); ?></h1>
-			<p class="presence-hero__lead"><?php esc_html_e( 'Une réceptionniste numérique animée qui accueille vos visiteurs, répond à leurs questions de vive voix et les oriente vers vous.', 'atie' ); ?></p>
-			<div class="presence-hero__actions">
-				<button type="button" class="btn btn--primary" data-presence-open><?php esc_html_e( 'Essayer la démonstration', 'atie' ); ?></button>
-				<a class="btn btn--ghost" href="<?php echo esc_url( atie_presence_contact_url() ); ?>"><?php esc_html_e( 'En parler avec nous', 'atie' ); ?></a>
-			</div>
-			<p class="presence-hero__note"><?php esc_html_e( 'Démonstration simulée : aucune connexion, aucun micro.', 'atie' ); ?></p>
-		</div>
-	</section>
+	<div class="presence">
 
-	<section class="page-section presence-avatars" id="receptionnistes">
-		<div class="container">
-			<header class="section-head">
-				<span class="section-eyebrow"><?php esc_html_e( 'Nos réceptionnistes', 'atie' ); ?></span>
-				<h2 class="section-title section-title--sm"><?php esc_html_e( 'Un visage, une voix, un ton pour chaque métier', 'atie' ); ?></h2>
-			</header>
-			<div class="presence-avatars__grid">
-				<?php foreach ( atie_presence_personas() as $persona ) : ?>
-					<article class="presence-avatar">
-						<div class="presence-avatar__visual">
-							<?php if ( $persona['image'] ) : ?>
-								<img src="<?php echo esc_url( $persona['image'] ); ?>" alt="<?php echo esc_attr( sprintf( /* translators: %s: receptionist name. */ __( 'Avatar de %s', 'atie' ), $persona['name'] ) ); ?>" loading="lazy">
-							<?php else : ?>
-								<div class="presence-avatar__face" data-presence-face="<?php echo esc_attr( $persona['variant'] ); ?>" aria-hidden="true"></div>
-							<?php endif; ?>
-						</div>
-						<div class="presence-avatar__body">
-							<h3 class="presence-avatar__name"><?php echo esc_html( $persona['name'] ); ?></h3>
-							<p class="presence-avatar__role"><?php echo esc_html( $persona['role'] ); ?></p>
-							<p class="presence-avatar__company"><?php echo esc_html( $persona['company'] ); ?></p>
-							<p class="presence-avatar__text"><?php echo esc_html( $persona['greeting'] ); ?></p>
-							<p class="presence-avatar__tone"><?php echo esc_html( $persona['tone'] ); ?></p>
-							<ul class="presence-avatar__langs" aria-label="<?php esc_attr_e( 'Langues', 'atie' ); ?>">
-								<?php foreach ( $persona['languages'] as $lang ) : ?>
-									<li><?php echo esc_html( $lang ); ?></li>
-								<?php endforeach; ?>
-							</ul>
-							<button type="button" class="btn btn--primary presence-avatar__try" data-presence-open="<?php echo esc_attr( $persona['id'] ); ?>">
-								<?php echo esc_html( sprintf( /* translators: %s: receptionist name. */ __( 'Essayer avec %s', 'atie' ), $persona['name'] ) ); ?>
-							</button>
-						</div>
-					</article>
-				<?php endforeach; ?>
-			</div>
-			<p class="presence-hero__note"><?php esc_html_e( 'Entreprises fictives, à titre de démonstration. Chaque réceptionniste est adaptée à votre marque : visage, voix, langues et informations.', 'atie' ); ?></p>
-		</div>
-	</section>
+		<section class="presence-welcome">
+			<div class="presence-wrap">
+				<span class="presence-kicker"><?php esc_html_e( 'ATIE Presence', 'atie' ); ?></span>
+				<h1 class="presence-welcome__title"><?php the_title(); ?></h1>
+				<p class="presence-welcome__lead"><?php esc_html_e( 'Des réceptionnistes numériques expressives et interactives, qui accueillent vos visiteurs de vive voix.', 'atie' ); ?></p>
 
-	<?php if ( trim( wp_strip_all_tags( get_the_content() ) ) ) : ?>
-		<section class="page-section presence-intro">
-			<div class="container container--narrow">
-				<div class="entry-content"><?php the_content(); ?></div>
+				<div class="presence-actions">
+					<?php foreach ( $actions as $action ) : ?>
+						<?php
+						$tag   = $action['open'] ? 'button' : 'a';
+						$attrs = $action['open'] ? ' type="button" data-presence-open' : ' href="' . esc_url( $action['href'] ) . '"';
+						?>
+						<<?php echo $tag . $attrs; // phpcs:ignore WordPress.Security.EscapeOutput -- built above from static values and esc_url. ?> class="presence-action">
+							<span class="presence-action__icon presence-action__icon--<?php echo esc_attr( $action['tone'] ); ?>" aria-hidden="true">
+								<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><?php echo $action['icon']; // phpcs:ignore WordPress.Security.EscapeOutput -- static SVG. ?></svg>
+							</span>
+							<span class="presence-action__label"><?php echo esc_html( $action['label'] ); ?> <span aria-hidden="true">›</span></span>
+						</<?php echo $tag; // phpcs:ignore WordPress.Security.EscapeOutput -- static tag name. ?>>
+					<?php endforeach; ?>
+				</div>
+
+				<?php if ( trim( wp_strip_all_tags( get_the_content() ) ) ) : ?>
+					<div class="entry-content presence-intro"><?php the_content(); ?></div>
+				<?php endif; ?>
 			</div>
 		</section>
-	<?php endif; ?>
 
-	<section class="page-section presence-steps">
-		<div class="container">
-			<header class="section-head">
-				<span class="section-eyebrow"><?php esc_html_e( 'Comment ça marche', 'atie' ); ?></span>
-				<h2 class="section-title section-title--sm"><?php esc_html_e( 'Trois étapes, aucune installation pour le visiteur', 'atie' ); ?></h2>
-			</header>
-			<ol class="presence-steps__list">
-				<?php foreach ( $steps as $i => $step ) : ?>
-					<li class="presence-step">
-						<span class="presence-step__num" aria-hidden="true"><?php echo esc_html( $i + 1 ); ?></span>
-						<h3 class="presence-step__title"><?php echo esc_html( $step['title'] ); ?></h3>
-						<p class="presence-step__text"><?php echo esc_html( $step['text'] ); ?></p>
-					</li>
-				<?php endforeach; ?>
-			</ol>
-		</div>
-	</section>
+		<section class="presence-featured" id="receptionnistes">
+			<div class="presence-wrap">
+				<header class="presence-featured__head">
+					<h2 class="presence-h2"><?php esc_html_e( 'Réceptionnistes en vedette', 'atie' ); ?></h2>
+					<a class="presence-link" href="<?php echo esc_url( $contact ); ?>"><?php esc_html_e( 'Sur mesure', 'atie' ); ?> <span aria-hidden="true">›</span></a>
+				</header>
 
-	<section class="page-section presence-features">
-		<div class="container">
-			<header class="section-head">
-				<span class="section-eyebrow"><?php esc_html_e( 'Ce qu’elle apporte', 'atie' ); ?></span>
-				<h2 class="section-title section-title--sm"><?php esc_html_e( 'Un accueil humain, même quand personne n’est disponible', 'atie' ); ?></h2>
-			</header>
-			<div class="card-grid presence-features__grid">
-				<?php foreach ( $features as $feature ) : ?>
-					<div class="service-card presence-feature">
-						<span class="service-card__icon" aria-hidden="true"><?php echo atie_service_icon_svg( $feature['icon'] ); // phpcs:ignore WordPress.Security.EscapeOutput -- static SVG. ?></span>
-						<h3 class="service-card__title"><?php echo esc_html( $feature['title'] ); ?></h3>
-						<p class="service-card__excerpt"><?php echo esc_html( $feature['text'] ); ?></p>
-					</div>
-				<?php endforeach; ?>
-			</div>
-		</div>
-	</section>
-
-	<section class="page-section presence-trust">
-		<div class="container">
-			<div class="presence-trust__box">
-				<div>
-					<span class="section-eyebrow"><?php esc_html_e( 'Confiance', 'atie' ); ?></span>
-					<h2 class="section-title section-title--sm"><?php esc_html_e( 'Pensée pour le respect du visiteur', 'atie' ); ?></h2>
-				</div>
-				<ul class="presence-trust__list">
-					<?php foreach ( $trust as $item ) : ?>
-						<li><?php echo esc_html( $item ); ?></li>
+				<div class="presence-gallery">
+					<?php foreach ( $personas as $persona ) : ?>
+						<article class="presence-card">
+							<button type="button" class="presence-card__hit" data-presence-open="<?php echo esc_attr( $persona['id'] ); ?>">
+								<span class="screen-reader-text"><?php echo esc_html( sprintf( /* translators: %s: receptionist name. */ __( 'Essayer avec %s', 'atie' ), $persona['name'] ) ); ?></span>
+							</button>
+							<div class="presence-card__media">
+								<?php if ( $persona['image'] ) : ?>
+									<img src="<?php echo esc_url( $persona['image'] ); ?>" alt="<?php echo esc_attr( sprintf( /* translators: %s: receptionist name. */ __( 'Portrait de %s, réceptionniste fictive', 'atie' ), $persona['name'] ) ); ?>" loading="lazy" width="900" height="1221">
+								<?php else : ?>
+									<div class="presence-card__face" data-presence-face="<?php echo esc_attr( $persona['variant'] ); ?>" aria-hidden="true"></div>
+								<?php endif; ?>
+							</div>
+							<div class="presence-card__info">
+								<ul class="presence-card__langs" aria-label="<?php esc_attr_e( 'Langues', 'atie' ); ?>">
+									<?php foreach ( $persona['languages'] as $lang ) : ?>
+										<li><?php echo esc_html( $lang ); ?></li>
+									<?php endforeach; ?>
+								</ul>
+								<h3 class="presence-card__name"><?php echo esc_html( $persona['name'] ); ?></h3>
+								<p class="presence-card__role"><?php echo esc_html( $persona['role'] ); ?> · <span><?php echo esc_html( $persona['company'] ); ?></span></p>
+								<p class="presence-card__text"><?php echo esc_html( $persona['greeting'] ); ?></p>
+								<span class="presence-card__try" aria-hidden="true"><?php echo esc_html( sprintf( /* translators: %s: receptionist name. */ __( 'Essayer avec %s', 'atie' ), $persona['name'] ) ); ?> ›</span>
+							</div>
+						</article>
 					<?php endforeach; ?>
-				</ul>
-			</div>
-		</div>
-	</section>
 
-	<section class="page-section presence-cta">
-		<div class="container">
-			<h2 class="section-title section-title--sm"><?php esc_html_e( 'Une réceptionniste pour votre site ?', 'atie' ); ?></h2>
-			<p class="presence-cta__text"><?php esc_html_e( 'ATIE Presence est en phase pilote. Parlons de votre accueil, de vos langues et de votre image.', 'atie' ); ?></p>
-			<div class="presence-hero__actions">
-				<a class="btn btn--primary" href="<?php echo esc_url( atie_presence_contact_url() ); ?>"><?php esc_html_e( 'Nous contacter', 'atie' ); ?></a>
-				<button type="button" class="btn btn--ghost" data-presence-open><?php esc_html_e( 'Revoir la démonstration', 'atie' ); ?></button>
+					<a class="presence-card presence-card--custom" href="<?php echo esc_url( $contact ); ?>">
+						<span class="presence-card__plus" aria-hidden="true">+</span>
+						<span class="presence-card__name"><?php esc_html_e( 'Votre réceptionniste', 'atie' ); ?></span>
+						<span class="presence-card__text"><?php esc_html_e( 'Votre visage de marque, votre voix, vos langues et vos informations.', 'atie' ); ?></span>
+						<span class="presence-card__try"><?php esc_html_e( 'En parler avec nous', 'atie' ); ?> ›</span>
+					</a>
+				</div>
+				<p class="presence-note"><?php esc_html_e( 'Entreprises fictives, à titre de démonstration. Démonstration simulée : aucune connexion, aucun micro.', 'atie' ); ?></p>
 			</div>
-		</div>
-	</section>
+		</section>
+
+		<section class="presence-steps">
+			<div class="presence-wrap">
+				<h2 class="presence-h2"><?php esc_html_e( 'Comment ça marche', 'atie' ); ?></h2>
+				<ol class="presence-steps__list">
+					<?php foreach ( $steps as $i => $step ) : ?>
+						<li class="presence-step">
+							<span class="presence-step__num" aria-hidden="true"><?php echo esc_html( $i + 1 ); ?></span>
+							<h3 class="presence-step__title"><?php echo esc_html( $step['title'] ); ?></h3>
+							<p class="presence-step__text"><?php echo esc_html( $step['text'] ); ?></p>
+						</li>
+					<?php endforeach; ?>
+				</ol>
+			</div>
+		</section>
+
+		<section class="presence-trust">
+			<div class="presence-wrap">
+				<div class="presence-trust__box">
+					<h2 class="presence-h2"><?php esc_html_e( 'Pensée pour le respect du visiteur', 'atie' ); ?></h2>
+					<ul class="presence-trust__list">
+						<?php foreach ( $trust as $item ) : ?>
+							<li><?php echo esc_html( $item ); ?></li>
+						<?php endforeach; ?>
+					</ul>
+				</div>
+			</div>
+		</section>
+
+		<section class="presence-cta">
+			<div class="presence-wrap">
+				<h2 class="presence-h2"><?php esc_html_e( 'Une réceptionniste pour votre site ?', 'atie' ); ?></h2>
+				<p class="presence-cta__text"><?php esc_html_e( 'ATIE Presence est en phase pilote. Parlons de votre accueil, de vos langues et de votre image.', 'atie' ); ?></p>
+				<a class="btn btn--primary" href="<?php echo esc_url( $contact ); ?>"><?php esc_html_e( 'Nous contacter', 'atie' ); ?></a>
+			</div>
+		</section>
+
+	</div>
 
 	<?php
 endwhile;

@@ -28,7 +28,7 @@ function atie_presence_contact_url() {
 
 /**
  * Receptionists presented on the page. Fictitious companies for the demo.
- * Image: Appearance → Customize → ATIE Presence; without one, the widget drawing is used.
+ * Image: Appearance → Customize → ATIE Presence overrides the portrait shipped with the theme.
  *
  * @return array<int, array{id:string,name:string,variant:string,role:string,company:string,tone:string,languages:string[],greeting:string,image:string}>
  */
@@ -45,20 +45,22 @@ function atie_presence_personas() {
 			'greeting'  => __( 'Horaires, premier rendez-vous, urgences : elle oriente le patient et passe la main au secrétariat.', 'atie' ),
 		),
 		array(
-			'id'        => 'marco',
-			'name'      => 'Marco',
-			'variant'   => 'marco',
-			'role'      => __( 'Concierge d’hôtel', 'atie' ),
+			'id'        => 'maya',
+			'name'      => 'Maya',
+			'variant'   => 'lea',
+			'role'      => __( 'Réceptionniste d’hôtel', 'atie' ),
 			'company'   => __( 'Hôtel Chalet du Lac (exemple fictif)', 'atie' ),
-			'tone'      => __( 'Courtois et enjoué, sens de l’accueil.', 'atie' ),
+			'tone'      => __( 'Courtoise et enjouée, sens de l’accueil.', 'atie' ),
 			'languages' => array( 'FR', 'DE', 'IT', 'EN' ),
-			'greeting'  => __( 'Arrivée, petit-déjeuner, activités autour du lac : il renseigne le client à toute heure.', 'atie' ),
+			'greeting'  => __( 'Arrivée, petit-déjeuner, activités autour du lac : elle renseigne le client à toute heure.', 'atie' ),
 		),
 	);
 
 	foreach ( $personas as &$persona ) {
 		$id               = absint( get_theme_mod( 'atie_presence_image_' . $persona['id'], 0 ) );
-		$persona['image'] = $id ? (string) wp_get_attachment_image_url( $id, 'large' ) : '';
+		$custom           = $id ? (string) wp_get_attachment_image_url( $id, 'large' ) : '';
+		$bundled          = '/assets/img/presence/' . $persona['id'] . '.jpg';
+		$persona['image'] = $custom ? $custom : ( file_exists( ATIE_DIR . $bundled ) ? ATIE_URI . $bundled : '' );
 	}
 	unset( $persona );
 
@@ -75,12 +77,12 @@ function atie_presence_customize_register( $wp_customize ) {
 		'atie_presence',
 		array(
 			'title'       => __( 'ATIE Presence', 'atie' ),
-			'description' => __( 'Images des réceptionnistes de la page ATIE Presence. Sans image, un dessin est affiché. Uniquement des visuels dont vous avez les droits.', 'atie' ),
+			'description' => __( 'Portraits des réceptionnistes de la page ATIE Presence (format vertical 3:4 conseillé). Sans image choisie, le portrait fourni avec le thème est utilisé. Uniquement des visuels dont vous avez les droits.', 'atie' ),
 			'priority'    => 31,
 		)
 	);
 
-	foreach ( array( 'lea' => 'Léa', 'marco' => 'Marco' ) as $id => $name ) {
+	foreach ( array( 'lea' => 'Léa', 'maya' => 'Maya' ) as $id => $name ) {
 		$wp_customize->add_setting(
 			'atie_presence_image_' . $id,
 			array(
@@ -163,3 +165,18 @@ function atie_presence_script_attributes( $tag, $handle ) {
 	return preg_replace( '/<script(?=[^>]*\sid=["\']atie-presence-widget-js["\'])/', '<script' . $attrs, $tag, 1 );
 }
 add_filter( 'script_loader_tag', 'atie_presence_script_attributes', 10, 2 );
+
+/**
+ * Dark showcase styling hook on the ATIE Presence page.
+ *
+ * @param string[] $classes Body classes.
+ * @return string[]
+ */
+function atie_presence_body_class( $classes ) {
+	if ( is_page_template( ATIE_PRESENCE_TEMPLATE ) ) {
+		$classes[] = 'atie-presence-dark';
+	}
+
+	return $classes;
+}
+add_filter( 'body_class', 'atie_presence_body_class' );
