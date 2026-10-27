@@ -8,6 +8,8 @@
  *   data-api             URL de l'API ATIE (sans / final). Absent : mode simulé
  *   data-tenant          identifiant de l'entreprise (config/tenants.json)
  *   data-avatar-name     Nom affiché (défaut « Léa »)
+ *   data-avatar-image    Image fixe de l'avatar (remplace le dessin animé de substitution)
+ *   data-avatar-variant  Dessin de substitution : lea | marco (défaut lea)
  *   data-idle-src        Boucle vidéo idle (WebM/MP4) — absente : avatar SVG de substitution
  *   data-poster          Image fixe de repli (réseau en échec, économie de données, reduced motion)
  *   data-position        right | left (défaut right)
@@ -36,6 +38,8 @@
     api: (ds.api || '').replace(/\/+$/, ''),
     tenant: ds.tenant || '',
     name: ds.avatarName || 'Léa',
+    image: ds.avatarImage || '',
+    variant: ds.avatarVariant === 'marco' ? 'marco' : 'lea',
     idleSrc: ds.idleSrc || '',
     poster: ds.poster || '',
     position: ds.position === 'left' ? 'left' : 'right',
@@ -60,7 +64,7 @@
       micDenied: 'Le micro n’est pas autorisé. Vous pouvez l’activer dans votre navigateur, ou nous laisser un message.',
       failed: 'La connexion a échoué.', ended: 'Conversation terminée. Merci !', timeUp: 'Durée maximale atteinte, la conversation est terminée.',
       fallback: 'Laisser un message', contact: 'Contacter l’entreprise',
-      sample: 'Bonjour, je suis ' + cfg.name + '. Comment puis-je vous aider ?', demoNote: 'Démonstration : aucune connexion réelle.'
+      sample: 'Bonjour, je suis {name}. Comment puis-je vous aider ?', demoNote: 'Démonstration : aucune connexion réelle.'
     },
     de: {
       invite: 'Mit unserer Rezeption sprechen', title: 'Digitale KI-Empfangsmitarbeiterin',
@@ -74,7 +78,7 @@
       micDenied: 'Das Mikrofon ist nicht erlaubt. Sie können es im Browser aktivieren oder uns eine Nachricht hinterlassen.',
       failed: 'Die Verbindung ist fehlgeschlagen.', ended: 'Gespräch beendet. Vielen Dank!', timeUp: 'Maximale Dauer erreicht, das Gespräch ist beendet.',
       fallback: 'Nachricht hinterlassen', contact: 'Unternehmen kontaktieren',
-      sample: 'Guten Tag, ich bin ' + cfg.name + '. Wie kann ich Ihnen helfen?', demoNote: 'Demo: keine echte Verbindung.'
+      sample: 'Guten Tag, ich bin {name}. Wie kann ich Ihnen helfen?', demoNote: 'Demo: keine echte Verbindung.'
     },
     it: {
       invite: 'Parla con la nostra receptionist', title: 'Receptionist digitale IA',
@@ -88,7 +92,7 @@
       micDenied: 'Il microfono non è autorizzato. Puoi attivarlo nel browser oppure lasciarci un messaggio.',
       failed: 'La connessione non è riuscita.', ended: 'Conversazione terminata. Grazie!', timeUp: 'Durata massima raggiunta, la conversazione è terminata.',
       fallback: 'Lascia un messaggio', contact: 'Contatta l’azienda',
-      sample: 'Buongiorno, sono ' + cfg.name + '. Come posso aiutarti?', demoNote: 'Demo: nessuna connessione reale.'
+      sample: 'Buongiorno, sono {name}. Come posso aiutarti?', demoNote: 'Demo: nessuna connessione reale.'
     },
     en: {
       invite: 'Talk to our receptionist', title: 'AI digital receptionist',
@@ -102,7 +106,7 @@
       micDenied: 'Microphone access is not allowed. You can enable it in your browser, or leave us a message.',
       failed: 'The connection failed.', ended: 'Conversation ended. Thank you!', timeUp: 'Maximum duration reached, the conversation has ended.',
       fallback: 'Leave a message', contact: 'Contact the company',
-      sample: 'Hello, I’m ' + cfg.name + '. How can I help you?', demoNote: 'Demo: no real connection.'
+      sample: 'Hello, I’m {name}. How can I help you?', demoNote: 'Demo: no real connection.'
     }
   };
   if (!T[cfg.lang]) cfg.lang = 'fr';
@@ -111,20 +115,31 @@
   var saveData = !!(navigator.connection && navigator.connection.saveData);
 
   // Avatar de substitution : à remplacer par la boucle licenciée (data-idle-src).
-  var FACE =
+  // Deux variantes : cheveux longs (lea) ou courts avec barbe légère (marco).
+  var HAIR = {
+    lea: { back: '<path d="M52 96c0-40 22-62 48-62s48 22 48 62c0 6-2 10-4 12 0-22-8-34-18-42-10 8-34 10-52 4-14 8-20 22-22 38-2-2-0-8 0-12z" fill="#3a2a22"/>',
+      front: '<path d="M62 92c8-26 28-34 40-32 16 0 34 10 36 32-10-16-26-22-40-22s-28 8-36 22z" fill="#3a2a22"/>', beard: '' },
+    marco: { back: '',
+      front: '<path d="M61 90c0-30 17-48 39-48s39 18 39 48c-4-12-12-20-22-22-10 4-26 4-38-2-8 6-14 14-18 24z" fill="#2b211c"/>',
+      beard: '<path d="M66 112q4 30 34 32 30-2 34-32-6 14-14 16-8-6-20-6t-20 6q-8-2-14-16z" fill="#2b211c" opacity=".55"/>' }
+  };
+  function face(variant) {
+    var h = HAIR[variant] || HAIR.lea;
+    return (
     '<svg class="face" viewBox="0 0 200 200" aria-hidden="true" focusable="false">' +
     '<rect width="200" height="200" fill="var(--sand)"/>' +
     '<g class="body"><path d="M30 200c4-38 34-58 70-58s66 20 70 58z" fill="var(--ink)"/><path d="M86 140h28v22q-14 10-28 0z" fill="#d9a98a"/></g>' +
     '<g class="head">' +
-      '<path d="M52 96c0-40 22-62 48-62s48 22 48 62c0 6-2 10-4 12 0-22-8-34-18-42-10 8-34 10-52 4-14 8-20 22-22 38-2-2-0-8 0-12z" fill="#3a2a22"/>' +
+      h.back +
       '<ellipse cx="100" cy="98" rx="38" ry="46" fill="#e2b898"/>' +
-      '<path d="M62 92c8-26 28-34 40-32 16 0 34 10 36 32-10-16-26-22-40-22s-28 8-36 22z" fill="#3a2a22"/>' +
+      h.beard + h.front +
       '<g class="eyes"><g class="eye l"><ellipse cx="85" cy="98" rx="6" ry="4.2" fill="#fff"/><circle class="iris" cx="85" cy="98" r="2.8" fill="#3b2a1f"/><rect class="lid" x="78" y="93" width="14" height="10" fill="#e2b898"/></g>' +
       '<g class="eye r"><ellipse cx="115" cy="98" rx="6" ry="4.2" fill="#fff"/><circle class="iris" cx="115" cy="98" r="2.8" fill="#3b2a1f"/><rect class="lid" x="108" y="93" width="14" height="10" fill="#e2b898"/></g></g>' +
       '<path d="M77 89q8-5 16-1M107 88q8-4 16 1" stroke="#3a2a22" stroke-width="2.2" fill="none" stroke-linecap="round"/>' +
       '<path d="M100 100v12q-4 3 0 4" stroke="#c99a7a" stroke-width="2" fill="none" stroke-linecap="round"/>' +
       '<path class="mouth" d="M88 124q12 9 24 0" stroke="#a8453f" stroke-width="3.2" fill="none" stroke-linecap="round"/>' +
-    '</g></svg>';
+    '</g></svg>');
+  }
 
   // Couleurs du thème (rouge d'action, encre, sable, papier) : une seule source, surchargeable par data-accent.
   var CSS =
@@ -199,12 +214,13 @@
 
   function attr(v) { return String(v).replace(/[&"<>]/g, function (c) { return { '&': '&amp;', '"': '&quot;', '<': '&lt;', '>': '&gt;' }[c]; }); }
   function media() {
+    if (cfg.image) return '<img class="media" alt="" src="' + attr(cfg.image) + '">';
     if (cfg.idleSrc) {
       return '<video class="media" muted loop playsinline preload="metadata"' + (cfg.poster ? ' poster="' + attr(cfg.poster) + '"' : '') +
         ' src="' + attr(cfg.idleSrc) + '" aria-hidden="true"></video>';
     }
     if (cfg.poster && (reduceMotion || saveData)) return '<img class="media" alt="" src="' + attr(cfg.poster) + '">';
-    return FACE;
+    return face(cfg.variant);
   }
 
   root.innerHTML =
@@ -316,7 +332,7 @@
   // --- Mode simulé (aucun réseau) ---
   function startSimulated() {
     goLive();
-    later(function () { setState(t.speaking, true); showCaption(t.sample); }, 1400);
+    later(function () { setState(t.speaking, true); showCaption(t.sample.replace('{name}', cfg.name)); }, 1400);
     later(function () { setState(t.listening, false, 'listening'); }, 4200);
     later(function () { setState(t.thinking, false); }, 8000);
     later(function () { setState(t.speaking, true); }, 9500);
@@ -490,6 +506,21 @@
 
   // Économie : l'animation s'arrête hors viewport ou onglet masqué ; figée si mouvement réduit.
   var bubbleMedia = bubble.querySelector('.face, video, img');
+  // Change d'avatar (nom, image, dessin) hors conversation : la page peut présenter plusieurs réceptionnistes.
+  function setPersona(p) {
+    if (S || !p) return false;
+    cfg.name = p.name || cfg.name; cfg.image = p.image || ''; cfg.variant = p.variant === 'marco' ? 'marco' : 'lea';
+    [bubble, stage].forEach(function (box) {
+      var old = box.querySelector(':scope > .face, :scope > .media');
+      var tmp = document.createElement('div'); tmp.innerHTML = media();
+      var el = tmp.firstChild; if (old) box.replaceChild(el, old); else box.insertBefore(el, box.firstChild);
+      if ((reduceMotion || saveData) && el.classList.contains('face')) el.classList.add('still');
+    });
+    bubbleMedia = bubble.querySelector('.face, video, img');
+    clearTimers(); caps.textContent = ''; caps.classList.remove('on'); setState('');
+    emit('atie:persona', { name: cfg.name });
+    return true;
+  }
   function setIdle(running) {
     var el = bubbleMedia; if (!el) return;
     if (el.tagName === 'VIDEO') { if (running && !reduceMotion && !saveData) el.play().catch(function () {}); else el.pause(); }
@@ -507,5 +538,5 @@
   document.body.appendChild(host);
   setIdle(true);
 
-  window.AtiePresence = { open: open, close: close, end: function () { endSession('end'); }, element: host, config: cfg, simulated: simulated };
+  window.AtiePresence = { open: open, close: close, setPersona: setPersona, faceMarkup: face, end: function () { endSession('end'); }, element: host, config: cfg, simulated: simulated };
 })();

@@ -27,6 +27,84 @@ function atie_presence_contact_url() {
 }
 
 /**
+ * Receptionists presented on the page. Fictitious companies for the demo.
+ * Image: Appearance → Customize → ATIE Presence; without one, the widget drawing is used.
+ *
+ * @return array<int, array{id:string,name:string,variant:string,role:string,company:string,tone:string,languages:string[],greeting:string,image:string}>
+ */
+function atie_presence_personas() {
+	$personas = array(
+		array(
+			'id'        => 'lea',
+			'name'      => 'Léa',
+			'variant'   => 'lea',
+			'role'      => __( 'Réceptionniste de cabinet dentaire', 'atie' ),
+			'company'   => __( 'Cabinet dentaire Lumière (exemple fictif)', 'atie' ),
+			'tone'      => __( 'Chaleureuse et rassurante, phrases courtes.', 'atie' ),
+			'languages' => array( 'FR', 'DE', 'IT', 'EN' ),
+			'greeting'  => __( 'Horaires, premier rendez-vous, urgences : elle oriente le patient et passe la main au secrétariat.', 'atie' ),
+		),
+		array(
+			'id'        => 'marco',
+			'name'      => 'Marco',
+			'variant'   => 'marco',
+			'role'      => __( 'Concierge d’hôtel', 'atie' ),
+			'company'   => __( 'Hôtel Chalet du Lac (exemple fictif)', 'atie' ),
+			'tone'      => __( 'Courtois et enjoué, sens de l’accueil.', 'atie' ),
+			'languages' => array( 'FR', 'DE', 'IT', 'EN' ),
+			'greeting'  => __( 'Arrivée, petit-déjeuner, activités autour du lac : il renseigne le client à toute heure.', 'atie' ),
+		),
+	);
+
+	foreach ( $personas as &$persona ) {
+		$id               = absint( get_theme_mod( 'atie_presence_image_' . $persona['id'], 0 ) );
+		$persona['image'] = $id ? (string) wp_get_attachment_image_url( $id, 'large' ) : '';
+	}
+	unset( $persona );
+
+	return apply_filters( 'atie_presence_personas', $personas );
+}
+
+/**
+ * Customizer: one image per receptionist.
+ *
+ * @param WP_Customize_Manager $wp_customize Customizer.
+ */
+function atie_presence_customize_register( $wp_customize ) {
+	$wp_customize->add_section(
+		'atie_presence',
+		array(
+			'title'       => __( 'ATIE Presence', 'atie' ),
+			'description' => __( 'Images des réceptionnistes de la page ATIE Presence. Sans image, un dessin est affiché. Uniquement des visuels dont vous avez les droits.', 'atie' ),
+			'priority'    => 31,
+		)
+	);
+
+	foreach ( array( 'lea' => 'Léa', 'marco' => 'Marco' ) as $id => $name ) {
+		$wp_customize->add_setting(
+			'atie_presence_image_' . $id,
+			array(
+				'default'           => 0,
+				'sanitize_callback' => 'absint',
+			)
+		);
+		$wp_customize->add_control(
+			new WP_Customize_Media_Control(
+				$wp_customize,
+				'atie_presence_image_' . $id,
+				array(
+					/* translators: %s: receptionist name. */
+					'label'     => sprintf( __( 'Image de %s', 'atie' ), $name ),
+					'section'   => 'atie_presence',
+					'mime_type' => 'image',
+				)
+			)
+		);
+	}
+}
+add_action( 'customize_register', 'atie_presence_customize_register' );
+
+/**
  * Page styles and widget, only where the template is used.
  */
 function atie_presence_assets() {
@@ -37,11 +115,23 @@ function atie_presence_assets() {
 	wp_enqueue_style( 'atie-presence', ATIE_URI . '/assets/css/presence.css', array( 'atie-main' ), ATIE_VERSION );
 	wp_enqueue_script( 'atie-presence-widget', ATIE_URI . '/assets/presence/atie-presence.js', array(), ATIE_VERSION, array( 'in_footer' => true ) );
 
-	// Buttons open the widget; "leave a message" leads to the contact page.
+	// Buttons open the widget (with the chosen receptionist); cards without image get the widget drawing;
+	// "leave a message" leads to the contact page.
+	$personas = array();
+	foreach ( atie_presence_personas() as $persona ) {
+		$personas[ $persona['id'] ] = array(
+			'name'    => $persona['name'],
+			'image'   => $persona['image'],
+			'variant' => $persona['variant'],
+		);
+	}
+	$data    = wp_json_encode( $personas );
 	$contact = wp_json_encode( atie_presence_contact_url() );
 	wp_add_inline_script(
 		'atie-presence-widget',
-		"(function(){document.querySelectorAll('[data-presence-open]').forEach(function(b){b.addEventListener('click',function(){if(window.AtiePresence)window.AtiePresence.open();});});" .
+		"(function(){var P={$data},A=window.AtiePresence;if(!A)return;" .
+		"document.querySelectorAll('[data-presence-face]').forEach(function(el){el.innerHTML=A.faceMarkup(el.getAttribute('data-presence-face'));el.firstChild.setAttribute('preserveAspectRatio','xMidYMid slice');});" .
+		"document.querySelectorAll('[data-presence-open]').forEach(function(b){b.addEventListener('click',function(){var id=b.getAttribute('data-presence-open');if(id&&P[id])A.setPersona(P[id]);A.open();});});" .
 		"document.addEventListener('atie:fallback',function(){window.location.href={$contact};});})();"
 	);
 }
@@ -59,11 +149,15 @@ function atie_presence_script_attributes( $tag, $handle ) {
 		return $tag;
 	}
 
-	$lang  = substr( (string) get_bloginfo( 'language' ), 0, 2 );
-	$attrs = sprintf(
-		' data-avatar-name="%s" data-lang="%s"',
-		esc_attr( __( 'Léa', 'atie' ) ),
-		esc_attr( in_array( $lang, array( 'fr', 'de', 'it', 'en' ), true ) ? $lang : 'fr' )
+	$lang     = substr( (string) get_bloginfo( 'language' ), 0, 2 );
+	$personas = atie_presence_personas();
+	$first    = $personas[0];
+	$attrs    = sprintf(
+		' data-avatar-name="%s" data-avatar-variant="%s" data-lang="%s"%s',
+		esc_attr( $first['name'] ),
+		esc_attr( $first['variant'] ),
+		esc_attr( in_array( $lang, array( 'fr', 'de', 'it', 'en' ), true ) ? $lang : 'fr' ),
+		$first['image'] ? ' data-avatar-image="' . esc_url( $first['image'] ) . '"' : ''
 	);
 
 	return preg_replace( '/<script(?=[^>]*\sid=["\']atie-presence-widget-js["\'])/', '<script' . $attrs, $tag, 1 );

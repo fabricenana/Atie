@@ -27,6 +27,37 @@
 }
 .presence-hero__note { margin: 14px 0 0; font-size: 13px; color: var(--muted); }
 
+/* ---- Receptionists ----------------------------------------------------- */
+.presence-avatars .presence-hero__note { text-align: center; margin-top: 22px; }
+.presence-avatars__grid {
+	display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: clamp(16px, 2vw, 28px);
+	max-width: 980px; margin: 0 auto;
+}
+.presence-avatar {
+	display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+	background: var(--card); border: 1px solid rgba(20, 20, 20, 0.08); border-radius: 18px; overflow: hidden;
+	box-shadow: 0 18px 40px rgba(20, 20, 20, 0.08);
+}
+.presence-avatar__visual { position: relative; background: #e9e3dc; min-height: 260px; }
+.presence-avatar__visual img,
+.presence-avatar__face,
+.presence-avatar__face svg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
+.presence-avatar__face { --sand: #e9e3dc; } /* the drawing uses the widget tokens; --ink comes from main.css */
+.presence-avatar__body { padding: clamp(18px, 2vw, 26px); display: flex; flex-direction: column; gap: 6px; }
+.presence-avatar__name { font-size: 26px; font-weight: 700; color: var(--ink); }
+.presence-avatar__role { margin: 0; font-family: var(--font-ui); font-weight: 600; font-size: 13px; letter-spacing: 0.04em; color: var(--red); }
+.presence-avatar__company { margin: 0; font-size: 13px; color: var(--faint); }
+.presence-avatar__text { margin: 8px 0 0; font-size: 14.5px; line-height: 1.55; color: var(--ink); }
+.presence-avatar__tone { margin: 0; font-size: 13.5px; color: var(--muted); font-style: italic; }
+.presence-avatar__langs { list-style: none; margin: 8px 0 0; padding: 0; display: flex; gap: 6px; flex-wrap: wrap; }
+.presence-avatar__langs li {
+	font-family: var(--font-ui); font-weight: 600; font-size: 11.5px; letter-spacing: 0.08em;
+	padding: 4px 9px; border-radius: 999px; background: rgba(227, 30, 36, 0.08); color: var(--red);
+}
+.presence-avatar__langs { margin-bottom: 18px; }
+.presence-avatar__try { margin-top: auto; align-self: flex-start; }
+.presence-avatar__face .lid { display: none; } /* eyelids are only animated inside the widget */
+
 /* ---- Steps ------------------------------------------------------------- */
 .presence-steps__list {
 	list-style: none; margin: 0; padding: 0;
@@ -74,6 +105,12 @@
 /* ---- Responsive -------------------------------------------------------- */
 @media (max-width: 1024px) {
 	.presence-features__grid { grid-template-columns: repeat(2, 1fr); }
+	.presence-avatars__grid { grid-template-columns: 1fr; max-width: 620px; }
+}
+@media (max-width: 480px) {
+	.presence-avatar { grid-template-columns: 1fr; }
+	.presence-avatar__visual { min-height: 0; aspect-ratio: 1 / 1; }
+	.presence-avatar__try { align-self: stretch; justify-content: center; }
 }
 @media (max-width: 760px) {
 	.presence-steps__list,

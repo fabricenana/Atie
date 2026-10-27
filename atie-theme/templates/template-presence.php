@@ -80,6 +80,44 @@ while ( have_posts() ) :
 		</div>
 	</section>
 
+	<section class="page-section presence-avatars" id="receptionnistes">
+		<div class="container">
+			<header class="section-head">
+				<span class="section-eyebrow"><?php esc_html_e( 'Nos réceptionnistes', 'atie' ); ?></span>
+				<h2 class="section-title section-title--sm"><?php esc_html_e( 'Un visage, une voix, un ton pour chaque métier', 'atie' ); ?></h2>
+			</header>
+			<div class="presence-avatars__grid">
+				<?php foreach ( atie_presence_personas() as $persona ) : ?>
+					<article class="presence-avatar">
+						<div class="presence-avatar__visual">
+							<?php if ( $persona['image'] ) : ?>
+								<img src="<?php echo esc_url( $persona['image'] ); ?>" alt="<?php echo esc_attr( sprintf( /* translators: %s: receptionist name. */ __( 'Avatar de %s', 'atie' ), $persona['name'] ) ); ?>" loading="lazy">
+							<?php else : ?>
+								<div class="presence-avatar__face" data-presence-face="<?php echo esc_attr( $persona['variant'] ); ?>" aria-hidden="true"></div>
+							<?php endif; ?>
+						</div>
+						<div class="presence-avatar__body">
+							<h3 class="presence-avatar__name"><?php echo esc_html( $persona['name'] ); ?></h3>
+							<p class="presence-avatar__role"><?php echo esc_html( $persona['role'] ); ?></p>
+							<p class="presence-avatar__company"><?php echo esc_html( $persona['company'] ); ?></p>
+							<p class="presence-avatar__text"><?php echo esc_html( $persona['greeting'] ); ?></p>
+							<p class="presence-avatar__tone"><?php echo esc_html( $persona['tone'] ); ?></p>
+							<ul class="presence-avatar__langs" aria-label="<?php esc_attr_e( 'Langues', 'atie' ); ?>">
+								<?php foreach ( $persona['languages'] as $lang ) : ?>
+									<li><?php echo esc_html( $lang ); ?></li>
+								<?php endforeach; ?>
+							</ul>
+							<button type="button" class="btn btn--primary presence-avatar__try" data-presence-open="<?php echo esc_attr( $persona['id'] ); ?>">
+								<?php echo esc_html( sprintf( /* translators: %s: receptionist name. */ __( 'Essayer avec %s', 'atie' ), $persona['name'] ) ); ?>
+							</button>
+						</div>
+					</article>
+				<?php endforeach; ?>
+			</div>
+			<p class="presence-hero__note"><?php esc_html_e( 'Entreprises fictives, à titre de démonstration. Chaque réceptionniste est adaptée à votre marque : visage, voix, langues et informations.', 'atie' ); ?></p>
+		</div>
+	</section>
+
 	<?php if ( trim( wp_strip_all_tags( get_the_content() ) ) ) : ?>
 		<section class="page-section presence-intro">
 			<div class="container container--narrow">
