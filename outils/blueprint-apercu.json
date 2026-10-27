@@ -1,0 +1,14 @@
+{
+  "$schema": "https://playground.wordpress.net/blueprint-schema.json",
+  "landingPage": "/atie-presence/",
+  "login": true,
+  "steps": [
+    { "step": "defineWpConfigConsts", "consts": { "WP_DEBUG": true, "WP_DEBUG_DISPLAY": true, "WP_DEBUG_LOG": true } },
+    { "step": "setSiteOptions", "options": { "permalink_structure": "/%postname%/", "blogname": "ATIE essai local" } },
+    { "step": "activateTheme", "themeFolderName": "atie-theme" },
+    {
+      "step": "runPHP",
+      "code": "<?php require '/wordpress/wp-load.php'; if ( ! get_page_by_path( 'contact' ) ) { $c = wp_insert_post( array( 'post_type' => 'page', 'post_status' => 'publish', 'post_title' => 'Contact', 'post_name' => 'contact' ) ); update_post_meta( $c, '_wp_page_template', 'templates/template-contact.php' ); } if ( ! get_page_by_path( 'atie-presence' ) ) { $p = wp_insert_post( array( 'post_type' => 'page', 'post_status' => 'publish', 'post_title' => 'Une réceptionniste IA pour votre site', 'post_name' => 'atie-presence' ) ); update_post_meta( $p, '_wp_page_template', 'templates/template-presence.php' ); } flush_rewrite_rules();"
+    }
+  ]
+}
