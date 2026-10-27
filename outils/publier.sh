@@ -32,7 +32,10 @@ zip="dist/atie-theme-$style.zip"
 git archive --format=zip -o "$zip" HEAD atie-theme
 echo "version : $style"
 echo "archive : $zip ($(du -k "$zip" | cut -f1) Ko, $(unzip -l "$zip" | tail -1 | awk '{print $2}') fichiers)"
-unzip -l "$zip" | awk 'NR>3 {print $4}' | grep -v '^atie-theme/' | grep -v '^$' && { echo "ARRÊT : fichier hors de atie-theme/." >&2; exit 1; } || true
+if unzip -Z1 "$zip" | grep -v '^atie-theme/'; then
+	echo "ARRÊT : fichier hors de atie-theme/." >&2
+	exit 1
+fi
 
 if [ "${1:-}" != "--publier" ]; then
 	echo "Contrôle terminé. Rien n'a été publié (ajoutez --publier)."
