@@ -49,7 +49,7 @@ function atie_presence_personas() {
 		array(
 			'id'        => 'maya',
 			'name'      => 'Maya',
-			'agent_id'  => '',
+			'agent_id'  => 'agent_fd6544c9c1935c9e',
 			'variant'   => 'lea',
 			'role'      => __( 'Réceptionniste d’hôtel', 'atie' ),
 			'company'   => __( 'Hôtel Chalet du Lac (exemple fictif)', 'atie' ),
