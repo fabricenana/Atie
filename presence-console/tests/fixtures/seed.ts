@@ -1,22 +1,74 @@
 /**
- * Données de démonstration — entièrement fictives.
+ * Jeu de données de TEST — entièrement fictif (domaines .example, numéros DEMO-).
  *
- * Générées de façon déterministe (graine fixe) relativement à une date de référence,
- * pour que les écrans aient toujours des périodes cohérentes. Aucune donnée réelle
- * de client, aucune transcription, aucune mesure fournisseur réelle.
+ * N'est jamais chargé par l'application : sert uniquement de fixture aux tests, qui
+ * l'insèrent dans une base PGlite (tests/helpers/db.ts). Généré de façon déterministe
+ * (graine fixe) relativement à une date de référence.
  */
 import type {
+  AuditEvent,
+  Avatar,
+  ConcurrencyEntitlement,
   Conversation,
   ConversationEvent,
-  DemoStore,
   EndReason,
+  Incident,
+  Invoice,
+  KnowledgeDocument,
+  KnowledgeSource,
   Lang,
+  MinuteTopup,
+  Notification,
   Organization,
+  OrganizationUser,
+  Payment,
+  Plan,
+  PlatformSettings,
+  ProviderStatus,
+  ProviderUsage,
   Receptionist,
   SessionStatus,
+  Subscription,
+  SupportRequest,
   UsageRecord,
-} from "../domain/types";
-import { PLAN_GRID, PROVIDER_COST_CENTS_PER_MIN } from "../domain/pricing";
+  User,
+  VisitorRequest,
+  WebsiteDomain,
+  WidgetInstallation,
+} from "../../lib/domain/types";
+import { PLAN_GRID, PROVIDER_COST_CENTS_PER_MIN } from "../../lib/domain/pricing";
+
+/** Ensemble des données de la fixture (ancien store local). */
+export interface Dataset {
+  version: number;
+  generatedAt: string;
+  users: User[];
+  organizationUsers: OrganizationUser[];
+  organizations: Organization[];
+  websiteDomains: WebsiteDomain[];
+  avatars: Avatar[];
+  receptionists: Receptionist[];
+  knowledgeSources: KnowledgeSource[];
+  knowledgeDocuments: KnowledgeDocument[];
+  widgetInstallations: WidgetInstallation[];
+  conversations: Conversation[];
+  conversationEvents: ConversationEvent[];
+  usageRecords: UsageRecord[];
+  providerUsage: ProviderUsage[];
+  plans: Plan[];
+  subscriptions: Subscription[];
+  minuteTopups: MinuteTopup[];
+  concurrencyEntitlements: ConcurrencyEntitlement[];
+  invoices: Invoice[];
+  payments: Payment[];
+  visitorRequests: VisitorRequest[];
+  supportRequests: SupportRequest[];
+  notifications: Notification[];
+  auditEvents: AuditEvent[];
+  incidents: Incident[];
+  providerStatuses: ProviderStatus[];
+  settings: PlatformSettings;
+}
 
 export const SEED_VERSION = 1;
 
@@ -45,7 +97,7 @@ function addMonths(d: Date, n: number) {
 }
 
 interface OrgPlan {
-  org: Omit<Organization, "createdAt" | "updatedAt" | "activatedAt" | "demo"> & { activatedDaysAgo: number | null };
+  org: Omit<Organization, "createdAt" | "updatedAt" | "activatedAt"> & { activatedDaysAgo: number | null };
   planId: string | null;
   /** Minutes facturables visées sur la période en cours. */
   currentMinutes: number;
@@ -54,7 +106,7 @@ interface OrgPlan {
   langs: Lang[];
 }
 
-export function buildSeed(now: Date = new Date()): DemoStore {
+export function buildSeed(now: Date = new Date()): Dataset {
   const r = rng(20261029);
   const pick = <T,>(xs: T[]) => xs[Math.floor(r() * xs.length)];
   const nowMs = now.getTime();
@@ -64,24 +116,24 @@ export function buildSeed(now: Date = new Date()): DemoStore {
   // -------------------------------------------------------------------------
   // Utilisateurs (fictifs)
   // -------------------------------------------------------------------------
-  const users: DemoStore["users"] = [
-    { id: "usr_super", email: "direction@atie.example", fullName: "Direction ATIE (démo)", atieRole: "super_admin", status: "active", lastLoginAt: iso(nowMs - 2 * 3600_000), createdAt: iso(nowMs - 400 * DAY), demo: true },
-    { id: "usr_admin", email: "admin@atie.example", fullName: "Camille Admin (démo)", atieRole: "atie_admin", status: "active", lastLoginAt: iso(nowMs - 26 * 3600_000), createdAt: iso(nowMs - 300 * DAY), demo: true },
-    { id: "usr_ops", email: "operations@atie.example", fullName: "Noah Opérateur (démo)", atieRole: "atie_operator", status: "active", lastLoginAt: iso(nowMs - 5 * 3600_000), createdAt: iso(nowMs - 200 * DAY), demo: true },
-    { id: "usr_lumiere_admin", email: "direction@lumiere.example", fullName: "Dr Claire Morel (démo)", atieRole: null, status: "active", lastLoginAt: iso(nowMs - 3 * DAY), createdAt: iso(nowMs - 180 * DAY), demo: true },
-    { id: "usr_lumiere_view", email: "secretariat@lumiere.example", fullName: "Inès Secrétariat (démo)", atieRole: null, status: "active", lastLoginAt: iso(nowMs - 1 * DAY), createdAt: iso(nowMs - 170 * DAY), demo: true },
-    { id: "usr_chalet_admin", email: "reception@chaletdulac.example", fullName: "Marc Favre (démo)", atieRole: null, status: "active", lastLoginAt: iso(nowMs - 8 * 3600_000), createdAt: iso(nowMs - 150 * DAY), demo: true },
-    { id: "usr_horizon_admin", email: "gerance@horizon.example", fullName: "Sophie Rochat (démo)", atieRole: null, status: "active", lastLoginAt: iso(nowMs - 2 * DAY), createdAt: iso(nowMs - 12 * DAY), demo: true },
-    { id: "usr_alpes_admin", email: "atelier@garagedesalpes.example", fullName: "Luca Bonvin (démo)", atieRole: null, status: "active", lastLoginAt: iso(nowMs - 40 * DAY), createdAt: iso(nowMs - 120 * DAY), demo: true },
-    { id: "usr_moser_admin", email: "kanzlei@moser.example", fullName: "Anna Moser (démo)", atieRole: null, status: "invited", lastLoginAt: null, createdAt: iso(nowMs - 4 * DAY), demo: true },
-    { id: "usr_rive_admin", email: "bonjour@florale-rive.example", fullName: "Julie Perrin (démo)", atieRole: null, status: "active", lastLoginAt: iso(nowMs - 6 * DAY), createdAt: iso(nowMs - 90 * DAY), demo: true },
+  const users: Dataset["users"] = [
+    { id: "usr_super", email: "direction@atie.example", fullName: "Direction ATIE (démo)", atieRole: "super_admin", status: "active", lastLoginAt: iso(nowMs - 2 * 3600_000), createdAt: iso(nowMs - 400 * DAY) },
+    { id: "usr_admin", email: "admin@atie.example", fullName: "Camille Admin (démo)", atieRole: "atie_admin", status: "active", lastLoginAt: iso(nowMs - 26 * 3600_000), createdAt: iso(nowMs - 300 * DAY) },
+    { id: "usr_ops", email: "operations@atie.example", fullName: "Noah Opérateur (démo)", atieRole: "atie_operator", status: "active", lastLoginAt: iso(nowMs - 5 * 3600_000), createdAt: iso(nowMs - 200 * DAY) },
+    { id: "usr_lumiere_admin", email: "direction@lumiere.example", fullName: "Dr Claire Morel (démo)", atieRole: null, status: "active", lastLoginAt: iso(nowMs - 3 * DAY), createdAt: iso(nowMs - 180 * DAY) },
+    { id: "usr_lumiere_view", email: "secretariat@lumiere.example", fullName: "Inès Secrétariat (démo)", atieRole: null, status: "active", lastLoginAt: iso(nowMs - 1 * DAY), createdAt: iso(nowMs - 170 * DAY) },
+    { id: "usr_chalet_admin", email: "reception@chaletdulac.example", fullName: "Marc Favre (démo)", atieRole: null, status: "active", lastLoginAt: iso(nowMs - 8 * 3600_000), createdAt: iso(nowMs - 150 * DAY) },
+    { id: "usr_horizon_admin", email: "gerance@horizon.example", fullName: "Sophie Rochat (démo)", atieRole: null, status: "active", lastLoginAt: iso(nowMs - 2 * DAY), createdAt: iso(nowMs - 12 * DAY) },
+    { id: "usr_alpes_admin", email: "atelier@garagedesalpes.example", fullName: "Luca Bonvin (démo)", atieRole: null, status: "active", lastLoginAt: iso(nowMs - 40 * DAY), createdAt: iso(nowMs - 120 * DAY) },
+    { id: "usr_moser_admin", email: "kanzlei@moser.example", fullName: "Anna Moser (démo)", atieRole: null, status: "invited", lastLoginAt: null, createdAt: iso(nowMs - 4 * DAY) },
+    { id: "usr_rive_admin", email: "bonjour@florale-rive.example", fullName: "Julie Perrin (démo)", atieRole: null, status: "active", lastLoginAt: iso(nowMs - 6 * DAY), createdAt: iso(nowMs - 90 * DAY) },
   ];
 
   // -------------------------------------------------------------------------
   // Offres : grille validée (lib/domain/pricing.ts).
   // -------------------------------------------------------------------------
   const planDates = { createdAt: iso(nowMs - 365 * DAY), updatedAt: iso(nowMs - 1 * DAY) };
-  const plans: DemoStore["plans"] = PLAN_GRID.map((p) => ({ id: `pln_${p.code}`, ...p, approval: "confirmed", active: true, ...planDates }));
+  const plans: Dataset["plans"] = PLAN_GRID.map((p) => ({ id: `pln_${p.code}`, ...p, approval: "confirmed", active: true, ...planDates }));
 
   // -------------------------------------------------------------------------
   // Entreprises fictives
@@ -122,11 +174,11 @@ export function buildSeed(now: Date = new Date()): DemoStore {
       activatedAt: activatedDaysAgo === null ? null : iso(nowMs - activatedDaysAgo * DAY),
       createdAt: iso(created),
       updatedAt: iso(nowMs - Math.floor(r() * 10) * DAY),
-      demo: true,
+
     };
   });
 
-  const organizationUsers: DemoStore["organizationUsers"] = [
+  const organizationUsers: Dataset["organizationUsers"] = [
     ["org_lumiere", "usr_lumiere_admin", "org_admin"],
     ["org_lumiere", "usr_lumiere_view", "org_viewer"],
     ["org_chalet", "usr_chalet_admin", "org_admin"],
@@ -142,7 +194,7 @@ export function buildSeed(now: Date = new Date()): DemoStore {
     createdAt: iso(nowMs - 100 * DAY),
   }));
 
-  const websiteDomains: DemoStore["websiteDomains"] = [
+  const websiteDomains: Dataset["websiteDomains"] = [
     ["org_lumiere", "cabinet-lumiere.example", true],
     ["org_lumiere", "www.cabinet-lumiere.example", true],
     ["org_chalet", "chaletdulac.example", true],
@@ -163,7 +215,7 @@ export function buildSeed(now: Date = new Date()): DemoStore {
   // -------------------------------------------------------------------------
   // Avatars existants (LemonSlice) — références seulement, aucun appel.
   // -------------------------------------------------------------------------
-  const avatars: DemoStore["avatars"] = [
+  const avatars: Dataset["avatars"] = [
     { id: "avt_lea", name: "Léa", provider: "lemonslice", providerAvatarId: "agent_ee494dab89f98682", portraitUrl: "/presence/lea.jpg", createdAt: iso(nowMs - 200 * DAY) },
     { id: "avt_maya", name: "Maya", provider: "lemonslice", providerAvatarId: "agent_fd6544c9c1935c9e", portraitUrl: "/presence/maya.jpg", createdAt: iso(nowMs - 190 * DAY) },
   ];
@@ -245,16 +297,16 @@ export function buildSeed(now: Date = new Date()): DemoStore {
     ["org_alpes", "text", "Horaires atelier", "Horaires", "Saisie manuelle", "Lundi à vendredi : 7 h 30 – 12 h, 13 h 30 – 18 h."],
     ["org_rive", "text", "Livraisons", "Commandes", "Saisie manuelle", "Livraison à Genève du mardi au samedi, commande la veille avant 17 h."],
   ];
-  const statuses = ["demo_not_indexed", "demo_not_indexed", "pending", "failed"] as const;
-  const knowledgeSources: DemoStore["knowledgeSources"] = [];
-  const knowledgeDocuments: DemoStore["knowledgeDocuments"] = [];
+  const statuses = ["pending", "pending", "pending", "failed"] as const;
+  const knowledgeSources: Dataset["knowledgeSources"] = [];
+  const knowledgeDocuments: Dataset["knowledgeDocuments"] = [];
   kb.forEach(([organizationId, kind, title, category, origin, content], i) => {
     const id = `kbs_${i + 1}`;
     const versions = 1 + (i % 3 === 0 ? 1 : 0);
     const updatedAt = iso(nowMs - (i * 3 + 2) * DAY);
     knowledgeSources.push({
       id, organizationId, kind, title, category, origin,
-      indexStatus: kind === "text" ? "demo_not_indexed" : statuses[i % statuses.length],
+      indexStatus: kind === "text" ? "pending" : statuses[i % statuses.length],
       currentVersion: versions, createdAt: iso(nowMs - (i * 3 + 30) * DAY), updatedAt, updatedBy: "usr_admin",
     });
     for (let v = 1; v <= versions; v++) {
@@ -269,7 +321,7 @@ export function buildSeed(now: Date = new Date()): DemoStore {
   // -------------------------------------------------------------------------
   // Widget
   // -------------------------------------------------------------------------
-  const widgetInstallations: DemoStore["widgetInstallations"] = [
+  const widgetInstallations: Dataset["widgetInstallations"] = [
     ["org_lumiere", "rcp_lea_lumiere", "installed", "wordpress"],
     ["org_chalet", "rcp_maya_chalet", "installed", "generic"],
     ["org_horizon", "rcp_lea_horizon", "ready", "wordpress"],
@@ -376,7 +428,7 @@ export function buildSeed(now: Date = new Date()): DemoStore {
   for (const c of conversations) {
     if (c.status === "active" || c.status === "connecting") continue;
     const key = `${c.organizationId}|${dayKey(c.startedAt)}`;
-    const u = usageMap.get(key) ?? { id: `use_${usageMap.size + 1}`, organizationId: c.organizationId, day: dayKey(c.startedAt), sessions: 0, billableSeconds: 0, origin: "demo" as const };
+    const u = usageMap.get(key) ?? { id: `use_${usageMap.size + 1}`, organizationId: c.organizationId, day: dayKey(c.startedAt), sessions: 0, billableSeconds: 0, origin: "estimated" as const };
     u.sessions++;
     u.billableSeconds += c.billableSeconds;
     usageMap.set(key, u);
@@ -386,16 +438,16 @@ export function buildSeed(now: Date = new Date()): DemoStore {
   // -------------------------------------------------------------------------
   // Fournisseurs : aucune donnée réelle disponible.
   // -------------------------------------------------------------------------
-  const providerUsage: DemoStore["providerUsage"] = [
-    { id: "pvu_livekit", provider: "livekit", periodStart: iso(periodStart), periodEnd: iso(periodEnd), minutesUsed: null, minutesAvailable: null, costCents: null, origin: "demo" },
-    { id: "pvu_lemonslice", provider: "lemonslice", periodStart: iso(periodStart), periodEnd: iso(periodEnd), minutesUsed: null, minutesAvailable: null, costCents: null, origin: "demo" },
-    { id: "pvu_inference", provider: "livekit_inference", periodStart: iso(periodStart), periodEnd: iso(periodEnd), minutesUsed: null, minutesAvailable: null, costCents: null, origin: "demo" },
+  const providerUsage: Dataset["providerUsage"] = [
+    { id: "pvu_livekit", provider: "livekit", periodStart: iso(periodStart), periodEnd: iso(periodEnd), minutesUsed: null, minutesAvailable: null, costCents: null, origin: "estimated" },
+    { id: "pvu_lemonslice", provider: "lemonslice", periodStart: iso(periodStart), periodEnd: iso(periodEnd), minutesUsed: null, minutesAvailable: null, costCents: null, origin: "estimated" },
+    { id: "pvu_inference", provider: "livekit_inference", periodStart: iso(periodStart), periodEnd: iso(periodEnd), minutesUsed: null, minutesAvailable: null, costCents: null, origin: "estimated" },
   ];
 
   // -------------------------------------------------------------------------
   // Abonnements, recharges, factures (fictives, préfixe DEMO-)
   // -------------------------------------------------------------------------
-  const subscriptions: DemoStore["subscriptions"] = orgPlans
+  const subscriptions: Dataset["subscriptions"] = orgPlans
     .filter((op) => op.planId && op.org.activatedDaysAgo !== null)
     .map((op, i) => ({
       id: `sub_${i + 1}`,
@@ -411,16 +463,16 @@ export function buildSeed(now: Date = new Date()): DemoStore {
       updatedAt: iso(nowMs - 5 * DAY),
     }));
 
-  const minuteTopups: DemoStore["minuteTopups"] = [
+  const minuteTopups: Dataset["minuteTopups"] = [
     { id: "top_1", organizationId: "org_chalet", minutes: 30, priceCents: 1900, status: "pending", requestedAt: iso(nowMs - 1 * DAY), appliedAt: null, requestedBy: "usr_chalet_admin" },
     { id: "top_2", organizationId: "org_lumiere", minutes: 30, priceCents: 1900, status: "applied", requestedAt: iso(nowMs - 40 * DAY), appliedAt: iso(nowMs - 39 * DAY), requestedBy: "usr_lumiere_admin" },
   ];
-  const concurrencyEntitlements: DemoStore["concurrencyEntitlements"] = [
+  const concurrencyEntitlements: Dataset["concurrencyEntitlements"] = [
     { id: "cce_1", organizationId: "org_chalet", extraSessions: 1, monthlyPriceCents: 1990, status: "requested", startsAt: iso(periodEnd) },
   ];
 
-  const invoices: DemoStore["invoices"] = [];
-  const payments: DemoStore["payments"] = [];
+  const invoices: Dataset["invoices"] = [];
+  const payments: Dataset["payments"] = [];
   let invSeq = 0;
   for (const s of subscriptions) {
     const plan = plans.find((p) => p.id === s.planId)!;
@@ -431,7 +483,7 @@ export function buildSeed(now: Date = new Date()): DemoStore {
       invSeq++;
       const id = `inv_${invSeq}`;
       const due = issued.getTime() + 30 * DAY;
-      let status: DemoStore["invoices"][number]["status"] = due < nowMs ? "paid" : "open";
+      let status: Dataset["invoices"][number]["status"] = due < nowMs ? "paid" : "open";
       if (s.organizationId === "org_alpes" && m <= 1) status = "overdue";
       if (s.organizationId === "org_alpes" && m === 0) status = "overdue";
       invoices.push({
@@ -456,7 +508,7 @@ export function buildSeed(now: Date = new Date()): DemoStore {
   // -------------------------------------------------------------------------
   // Demandes visiteurs (résumés fictifs, pas de transcription)
   // -------------------------------------------------------------------------
-  const vr: Array<[string, DemoStore["visitorRequests"][number]["kind"], string, string, Lang, DemoStore["visitorRequests"][number]["status"], number]> = [
+  const vr: Array<[string, Dataset["visitorRequests"][number]["kind"], string, string, Lang, Dataset["visitorRequests"][number]["status"], number]> = [
     ["org_lumiere", "appointment", "Visiteur A. (démo)", "Souhaite un premier rendez-vous de contrôle, de préférence le matin.", "fr", "new", 0.2],
     ["org_lumiere", "message", "Visiteur B. (démo)", "Demande si le cabinet accepte les nouveaux patients.", "fr", "in_progress", 1.4],
     ["org_lumiere", "contact", "Visitor C. (demo)", "Asks to be called back about an emergency appointment.", "en", "done", 3.1],
@@ -467,25 +519,25 @@ export function buildSeed(now: Date = new Date()): DemoStore {
     ["org_rive", "quote", "Visiteur H. (démo)", "Devis pour la décoration florale d’un mariage.", "fr", "new", 1.8],
     ["org_rive", "message", "Visiteur I. (démo)", "Livraison possible samedi à Carouge ?", "fr", "done", 6],
   ];
-  const visitorRequests: DemoStore["visitorRequests"] = vr.map(([organizationId, kind, visitorName, summary, lang, status, daysAgo], i) => ({
+  const visitorRequests: Dataset["visitorRequests"] = vr.map(([organizationId, kind, visitorName, summary, lang, status, daysAgo], i) => ({
     id: `vrq_${i + 1}`, organizationId, conversationId: conversations.find((c) => c.organizationId === organizationId && c.status === "ended")?.id ?? null,
     kind, visitorName, visitorContact: `visiteur${i + 1}@exemple.invalid`, summary, lang, status, createdAt: iso(nowMs - daysAgo * DAY),
   }));
 
-  const supportRequests: DemoStore["supportRequests"] = [
+  const supportRequests: Dataset["supportRequests"] = [
     { id: "sup_1", organizationId: "org_chalet", kind: "minutes", subject: "Minutes presque épuisées", message: "Nous approchons de la limite mensuelle avant le week-end. Est-il possible d’ajouter des minutes ?", status: "open", createdAt: iso(nowMs - 1 * DAY), updatedAt: iso(nowMs - 1 * DAY), createdBy: "usr_chalet_admin" },
     { id: "sup_2", organizationId: "org_lumiere", kind: "change_request", subject: "Modifier la salutation de Léa", message: "Merci d’ajouter que le cabinet est accessible en fauteuil roulant.", status: "in_progress", createdAt: iso(nowMs - 4 * DAY), updatedAt: iso(nowMs - 2 * DAY), createdBy: "usr_lumiere_admin" },
     { id: "sup_3", organizationId: "org_rive", kind: "issue", subject: "La bulle masque le bouton panier sur mobile", message: "Sur iPhone, la bulle recouvre le bouton du panier.", status: "resolved", createdAt: iso(nowMs - 15 * DAY), updatedAt: iso(nowMs - 12 * DAY), createdBy: "usr_rive_admin" },
   ];
 
-  const notifications: DemoStore["notifications"] = [
+  const notifications: Dataset["notifications"] = [
     { id: "ntf_1", organizationId: "org_chalet", level: "warning", title: "Quota à 94 %", body: "Hôtel Chalet du Lac a utilisé 94 % de ses minutes incluses.", createdAt: iso(nowMs - 10 * 3600_000), readAt: null },
     { id: "ntf_2", organizationId: "org_alpes", level: "critical", title: "Facture impayée (démo)", body: "Garage des Alpes : service suspendu après échéance dépassée.", createdAt: iso(nowMs - 9 * DAY), readAt: null },
     { id: "ntf_3", organizationId: null, level: "info", title: "Nouvelle entreprise en configuration", body: "Étude Moser & Partner attend sa réceptionniste.", createdAt: iso(nowMs - 3 * DAY), readAt: iso(nowMs - 2 * DAY) },
     { id: "ntf_4", organizationId: "org_lumiere", level: "info", title: "Nouvelle demande de rendez-vous", body: "Une demande a été laissée à Léa.", createdAt: iso(nowMs - 5 * 3600_000), readAt: null },
   ];
 
-  const auditEvents: DemoStore["auditEvents"] = [
+  const auditEvents: Dataset["auditEvents"] = [
     ["org_alpes", "usr_admin", "organization.suspend", "Garage des Alpes", "Suspension après facture échue (démo)", 9],
     ["org_moser", "usr_admin", "organization.create", "Étude Moser & Partner", "Création de l’entreprise", 4],
     ["org_moser", "usr_ops", "receptionist.create", "Maya (brouillon)", "Réceptionniste en brouillon", 3],
@@ -497,13 +549,13 @@ export function buildSeed(now: Date = new Date()): DemoStore {
     target: target as string, detail: detail as string, at: iso(nowMs - (d as number) * DAY - i * 3600_000),
   }));
 
-  const incidents: DemoStore["incidents"] = [
+  const incidents: Dataset["incidents"] = [
     { id: "inc_1", service: "lemonslice", severity: "minor", title: "Avatar indisponible ponctuellement (démo)", status: "monitoring", startedAt: iso(nowMs - 26 * 3600_000), resolvedAt: null },
     { id: "inc_2", service: "api", severity: "minor", title: "Fermeture de salle non confirmée (démo)", status: "open", startedAt: iso(nowMs - 5 * 3600_000), resolvedAt: null },
     { id: "inc_3", service: "widget", severity: "minor", title: "Bulle masquant un bouton sur mobile (démo)", status: "resolved", startedAt: iso(nowMs - 15 * DAY), resolvedAt: iso(nowMs - 12 * DAY) },
   ];
 
-  const providerStatuses: DemoStore["providerStatuses"] = [
+  const providerStatuses: Dataset["providerStatuses"] = [
     { id: "prv_api", provider: "atie_api", label: "API ATIE Presence (Python)", configured: false, keyHint: null, connection: "not_connected", note: "Console non connectée : définir ATIE_API_URL côté serveur." },
     { id: "prv_livekit", provider: "livekit", label: "LiveKit Cloud", configured: false, keyHint: null, connection: "not_connected", note: "Géré par le backend Python. Aucune clé dans la console." },
     { id: "prv_lemonslice", provider: "lemonslice", label: "LemonSlice", configured: false, keyHint: null, connection: "not_connected", note: "Géré par le backend Python. Aucune clé dans la console." },
