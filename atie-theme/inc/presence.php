@@ -184,7 +184,7 @@ function atie_presence_assets() {
 	wp_enqueue_script( 'atie-presence-page' );
 	wp_add_inline_script(
 		'atie-presence-page',
-		"(function(){if(window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches)document.querySelectorAll('.presence-card video').forEach(function(v){v.removeAttribute('autoplay');v.pause();});})();"
+		"(function(){if(window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches)document.querySelectorAll('.presence-card video, .presence-bubble video').forEach(function(v){v.removeAttribute('autoplay');v.pause();});})();"
 	);
 
 	if ( ! atie_presence_trials_enabled() ) {
@@ -260,3 +260,96 @@ function atie_presence_body_class( $classes ) {
 	return $classes;
 }
 add_filter( 'body_class', 'atie_presence_body_class' );
+
+/**
+ * URL of the ATIE Presence page (page using the template), empty if none is published.
+ *
+ * @return string
+ */
+function atie_presence_page_url() {
+	static $url = null;
+	if ( null === $url ) {
+		$pages = get_posts(
+			array(
+				'post_type'      => 'page',
+				'post_status'    => 'publish',
+				'meta_key'       => '_wp_page_template', // phpcs:ignore WordPress.DB.SlowDBQuery -- one indexed lookup per request.
+				'meta_value'     => ATIE_PRESENCE_TEMPLATE, // phpcs:ignore WordPress.DB.SlowDBQuery
+				'posts_per_page' => 1,
+				'fields'         => 'ids',
+			)
+		);
+		$url = $pages ? get_permalink( $pages[0] ) : '';
+	}
+	return $url;
+}
+
+/**
+ * Primary menu: « Réceptionniste IA » after « Réalisations » and « Espace client » at the end,
+ * unless the menu already links to these pages (added by hand in Appearance → Menus).
+ *
+ * @param array<int, WP_Post|object> $items Menu items.
+ * @param stdClass                   $args  wp_nav_menu() arguments.
+ * @return array<int, WP_Post|object>
+ */
+function atie_presence_menu_items( $items, $args ) {
+	if ( empty( $args->theme_location ) || 'primary' !== $args->theme_location ) {
+		return $items;
+	}
+
+	$items = array_values( $items ); // WordPress numbers menu items from 1.
+	$have  = array();
+	foreach ( $items as $item ) {
+		$have[] = untrailingslashit( (string) $item->url );
+	}
+	$make = static function ( $id, $title, $url, $classes, $current = false ) {
+		return (object) array(
+			'ID'               => $id,
+			'db_id'            => $id,
+			'object_id'        => $id,
+			'title'            => $title,
+			'url'              => $url,
+			'menu_item_parent' => 0,
+			'type'             => 'custom',
+			'object'           => 'custom',
+			'type_label'       => '',
+			'target'           => '',
+			'attr_title'       => '',
+			'description'      => '',
+			'xfn'              => '',
+			'status'           => 'publish',
+			'classes'          => array_merge( array( 'menu-item', 'menu-item-type-custom' ), $classes, $current ? array( 'current-menu-item' ) : array() ),
+			'current'          => $current,
+			'current_item_ancestor' => false,
+			'current_item_parent'   => false,
+			'menu_order'       => 0,
+			'post_parent'      => 0,
+		);
+	};
+
+	$presence = atie_presence_page_url();
+	if ( $presence && ! in_array( untrailingslashit( $presence ), $have, true ) ) {
+		$at = count( $items );
+		foreach ( $items as $i => $item ) {
+			if ( false !== strpos( (string) $item->url, '/realisations' ) ) {
+				$at = $i + 1;
+				break;
+			}
+		}
+		$current = is_page_template( ATIE_PRESENCE_TEMPLATE ) || ( defined( 'ATIE_SIGNUP_TEMPLATE' ) && is_page_template( ATIE_SIGNUP_TEMPLATE ) );
+		array_splice( $items, $at, 0, array( $make( -9101, __( 'Réceptionniste IA', 'atie' ), $presence, array( 'menu-item--presence' ), $current ) ) );
+	}
+
+	if ( function_exists( 'atie_console_url' ) ) {
+		$console = atie_console_url();
+		if ( ! in_array( untrailingslashit( $console ), $have, true ) ) {
+			$items[] = $make( -9102, __( 'Espace client', 'atie' ), $console, array( 'menu-item--client' ) );
+		}
+	}
+
+	foreach ( array_values( $items ) as $i => $item ) {
+		$item->menu_order = $i + 1;
+	}
+	return array_values( $items );
+}
+add_filter( 'wp_nav_menu_objects', 'atie_presence_menu_items', 10, 2 );

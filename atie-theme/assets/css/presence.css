@@ -209,3 +209,68 @@
 @media (prefers-reduced-motion: reduce) {
 	.presence-card__media img, .presence-card__media video, .presence-action { transition: none; }
 }
+
+/* ---- Showcase bubble (live trials off) -------------------------------- */
+.presence-bubble {
+	position: fixed; right: 20px; bottom: 20px; z-index: 50;
+	display: flex; align-items: center; gap: 10px; text-decoration: none; color: #fff;
+}
+.presence-bubble__face {
+	width: 72px; height: 72px; border-radius: 50%; overflow: hidden; flex: none; order: 2;
+	border: 3px solid var(--red); box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45); background: var(--p-card);
+	transition: transform .2s ease;
+}
+.presence-bubble__face video,
+.presence-bubble__face img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 18%; display: block; }
+.presence-bubble__label {
+	order: 1; padding: 9px 14px; border-radius: 999px; background: rgba(22, 22, 24, 0.94); border: 1px solid var(--p-line);
+	font-family: var(--font-ui); font-weight: 600; font-size: 13.5px; white-space: nowrap;
+}
+.presence-bubble:hover .presence-bubble__face { transform: scale(1.06); }
+@media (max-width: 560px) {
+	.presence-bubble__label { display: none; }
+	.presence-bubble__face { width: 64px; height: 64px; }
+}
+
+/* ---- Sign-up page (templates/template-presence-signup.php) ------------ */
+.presence-signup__wrap { display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); gap: clamp(28px, 5vw, 72px); align-items: start; }
+.presence-signup__back { display: block; width: fit-content; margin-bottom: 18px; font-size: 14px; color: var(--p-muted); }
+.presence-signup__steps { margin: 24px 0 0; padding-left: 20px; color: #d4d4d8; display: grid; gap: 8px; font-size: 15px; }
+.presence-signup__panel { padding: clamp(20px, 3vw, 32px); border-radius: 22px; background: var(--p-panel); border: 1px solid var(--p-line); }
+.presence-signup__error { margin: 0 0 18px; padding: 12px 14px; border-radius: 12px; background: rgba(227, 30, 36, 0.14); border: 1px solid rgba(227, 30, 36, 0.5); color: #fecaca; }
+.presence-signup__done p { margin: 10px 0 22px; color: var(--p-muted); }
+
+.presence-form { display: grid; gap: 22px; }
+.presence-form__trap { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
+.presence-form__group { margin: 0; padding: 0; border: 0; min-width: 0; }
+.presence-form__group legend { margin-bottom: 10px; font-family: var(--font-ui); font-weight: 600; font-size: 14px; color: var(--p-text); }
+.presence-form__grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 16px; }
+.presence-form__field { margin: 0; display: grid; gap: 6px; }
+.presence-form__field label { font-size: 13.5px; color: var(--p-muted); }
+.presence-form input[type="text"],
+.presence-form input[type="email"],
+.presence-form input[type="url"],
+.presence-form input[type="tel"],
+.presence-form textarea {
+	width: 100%; box-sizing: border-box; padding: 11px 13px; border-radius: 12px;
+	background: var(--p-card); border: 1px solid rgba(255, 255, 255, 0.14); color: var(--p-text);
+	font: inherit; font-size: 15px;
+}
+.presence-form input:focus-visible,
+.presence-form textarea:focus-visible { outline: 2px solid var(--red); outline-offset: 1px; border-color: transparent; }
+.presence-form__choices { display: grid; gap: 8px; }
+.presence-form__choices--row { display: flex; flex-wrap: wrap; gap: 8px; }
+.presence-choice {
+	display: flex; align-items: flex-start; gap: 10px; padding: 10px 13px; border-radius: 12px;
+	background: var(--p-card); border: 1px solid rgba(255, 255, 255, 0.1); cursor: pointer; font-size: 14.5px; color: #e4e4e7;
+}
+.presence-choice:has(input:checked) { border-color: var(--red); background: rgba(227, 30, 36, 0.1); }
+.presence-choice input { accent-color: var(--red); margin-top: 3px; }
+.presence-form__consent { background: transparent; border: 0; padding: 0; font-size: 13.5px; color: var(--p-muted); }
+.presence-form__consent a { color: var(--p-text); }
+.presence-form__submit { justify-content: center; }
+
+@media (max-width: 860px) {
+	.presence-signup__wrap,
+	.presence-form__grid { grid-template-columns: 1fr; }
+}

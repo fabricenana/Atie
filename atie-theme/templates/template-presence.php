@@ -21,13 +21,14 @@ get_header();
 $contact  = atie_presence_contact_url();
 $personas = atie_presence_personas();
 $live     = atie_presence_trials_enabled();
+$signup   = atie_presence_signup_url();
 
 $actions = array(
 	array(
 		'tone'  => 'red',
 		'icon'  => '<path d="M12 5v14M5 12h14"/>',
 		'label' => __( 'Créer votre réceptionniste', 'atie' ),
-		'href'  => $contact,
+		'href'  => $signup,
 		'open'  => false,
 	),
 	array(
@@ -115,7 +116,7 @@ while ( have_posts() ) :
 			<div class="presence-wrap">
 				<header class="presence-featured__head">
 					<h2 class="presence-h2"><?php esc_html_e( 'Réceptionnistes en vedette', 'atie' ); ?></h2>
-					<a class="presence-link" href="<?php echo esc_url( $contact ); ?>"><?php esc_html_e( 'Sur mesure', 'atie' ); ?> <span aria-hidden="true">›</span></a>
+					<a class="presence-link" href="<?php echo esc_url( atie_presence_signup_url( array( 'receptionniste' => 'sur-mesure' ) ) ); ?>"><?php esc_html_e( 'Sur mesure', 'atie' ); ?> <span aria-hidden="true">›</span></a>
 				</header>
 
 				<div class="presence-gallery">
@@ -126,7 +127,7 @@ while ( have_posts() ) :
 									<span class="screen-reader-text"><?php echo esc_html( sprintf( /* translators: %s: receptionist name. */ __( 'Parler avec %s pendant une minute', 'atie' ), $persona['name'] ) ); ?></span>
 								</button>
 							<?php else : ?>
-								<a class="presence-card__hit" href="<?php echo esc_url( add_query_arg( 'receptionniste', $persona['id'], $contact ) ); ?>">
+								<a class="presence-card__hit" href="<?php echo esc_url( atie_presence_signup_url( array( 'receptionniste' => $persona['id'] ) ) ); ?>">
 									<span class="screen-reader-text"><?php echo esc_html( sprintf( /* translators: %s: receptionist name. */ __( 'Demander %s pour votre site', 'atie' ), $persona['name'] ) ); ?></span>
 								</a>
 							<?php endif; ?>
@@ -164,11 +165,11 @@ while ( have_posts() ) :
 						</article>
 					<?php endforeach; ?>
 
-					<a class="presence-card presence-card--custom" href="<?php echo esc_url( $contact ); ?>">
+					<a class="presence-card presence-card--custom" href="<?php echo esc_url( atie_presence_signup_url( array( 'receptionniste' => 'sur-mesure' ) ) ); ?>">
 						<span class="presence-card__plus" aria-hidden="true">+</span>
 						<span class="presence-card__name"><?php esc_html_e( 'Votre réceptionniste', 'atie' ); ?></span>
 						<span class="presence-card__text"><?php esc_html_e( 'Votre visage de marque, votre voix, vos langues et vos informations.', 'atie' ); ?></span>
-						<span class="presence-card__try"><?php esc_html_e( 'En parler avec nous', 'atie' ); ?> ›</span>
+						<span class="presence-card__try"><?php esc_html_e( 'Créer la vôtre', 'atie' ); ?> ›</span>
 					</a>
 				</div>
 				<p class="presence-note">
@@ -231,7 +232,7 @@ while ( have_posts() ) :
 								</li>
 								<li><?php esc_html_e( 'Français, allemand, italien, anglais', 'atie' ); ?></li>
 							</ul>
-							<a class="btn <?php echo $plan['featured'] ? 'btn--primary' : 'presence-btn--ghost'; ?> presence-plan__cta" href="<?php echo esc_url( add_query_arg( 'formule', strtolower( $plan['name'] ), $contact ) ); ?>"><?php esc_html_e( 'Choisir', 'atie' ); ?></a>
+							<a class="btn <?php echo $plan['featured'] ? 'btn--primary' : 'presence-btn--ghost'; ?> presence-plan__cta" href="<?php echo esc_url( atie_presence_signup_url( array( 'formule' => sanitize_key( $plan['name'] ) ) ) ); ?>"><?php esc_html_e( 'Choisir', 'atie' ); ?></a>
 						</li>
 					<?php endforeach; ?>
 				</ul>
@@ -262,7 +263,8 @@ while ( have_posts() ) :
 				<h2 class="presence-h2"><?php esc_html_e( 'Une réceptionniste pour votre site ?', 'atie' ); ?></h2>
 				<p class="presence-cta__text"><?php esc_html_e( 'ATIE Presence est en phase pilote. Parlons de votre accueil, de vos langues et de votre image.', 'atie' ); ?></p>
 				<div class="presence-cta__actions">
-					<a class="btn btn--primary" href="<?php echo esc_url( $contact ); ?>"><?php esc_html_e( 'Nous contacter', 'atie' ); ?></a>
+					<a class="btn btn--primary" href="<?php echo esc_url( $signup ); ?>"><?php esc_html_e( 'Créer ma réceptionniste', 'atie' ); ?></a>
+					<a class="btn presence-btn--ghost" href="<?php echo esc_url( $contact ); ?>"><?php esc_html_e( 'Nous contacter', 'atie' ); ?></a>
 					<?php if ( function_exists( 'atie_console_url' ) ) : ?>
 						<a class="btn presence-btn--ghost" href="<?php echo esc_url( atie_console_url() ); ?>" target="_blank" rel="noopener">
 							<?php esc_html_e( 'Espace client', 'atie' ); ?>
@@ -272,6 +274,24 @@ while ( have_posts() ) :
 				</div>
 			</div>
 		</section>
+
+		<?php if ( ! $live && ! empty( $personas[0]['image'] ) ) : ?>
+			<a class="presence-bubble" href="<?php echo esc_url( atie_presence_signup_url( array( 'receptionniste' => $personas[0]['id'] ) ) ); ?>">
+				<span class="presence-bubble__face" aria-hidden="true">
+					<?php if ( $personas[0]['video'] ) : ?>
+						<video src="<?php echo esc_url( $personas[0]['video'] ); ?>" poster="<?php echo esc_url( $personas[0]['image'] ); ?>" muted loop playsinline autoplay preload="metadata"></video>
+					<?php else : ?>
+						<img src="<?php echo esc_url( $personas[0]['image'] ); ?>" alt="">
+					<?php endif; ?>
+				</span>
+				<span class="presence-bubble__label">
+					<?php
+					/* translators: %s: receptionist name. */
+					echo esc_html( sprintf( __( '%s sur votre site ?', 'atie' ), $personas[0]['name'] ) );
+					?>
+				</span>
+			</a>
+		<?php endif; ?>
 
 	</div>
 

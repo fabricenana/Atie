@@ -9,7 +9,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'ATIE_VERSION', '1.6.0' );
+define( 'ATIE_VERSION', '1.7.0' );
 define( 'ATIE_DIR', get_template_directory() );
 define( 'ATIE_URI', get_template_directory_uri() );
 
@@ -23,5 +23,6 @@ require_once ATIE_DIR . '/inc/meta-boxes.php';
 require_once ATIE_DIR . '/inc/customizer.php';
 require_once ATIE_DIR . '/inc/template-tags.php';
 require_once ATIE_DIR . '/inc/presence.php';
+require_once ATIE_DIR . '/inc/presence-signup.php';
 require_once ATIE_DIR . '/inc/console.php';
 require_once ATIE_DIR . '/inc/updates.php';

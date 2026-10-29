@@ -49,6 +49,14 @@ $hero_subtitle = get_theme_mod( 'atie_hero_subtitle', __( 'Agence digitale à Ge
 	<img class="hero__figure" src="<?php echo esc_url( atie_penseur_url() ); ?>" alt="<?php esc_attr_e( 'Le Penseur', 'atie' ); ?>" />
 
 	<div class="hero__headline">
+		<?php $atie_presence = function_exists( 'atie_presence_page_url' ) ? atie_presence_page_url() : ''; ?>
+		<?php if ( $atie_presence ) : ?>
+			<a class="hero__news" href="<?php echo esc_url( $atie_presence ); ?>">
+				<span class="hero__news-tag"><?php esc_html_e( 'Nouveau', 'atie' ); ?></span>
+				<?php esc_html_e( 'Une réceptionniste IA pour votre site', 'atie' ); ?>
+				<span aria-hidden="true">›</span>
+			</a>
+		<?php endif; ?>
 		<h1 class="hero__title"><?php echo esc_html( $hero_title ); ?></h1>
 		<?php if ( $hero_subtitle ) : ?>
 			<p class="hero__subtitle"><?php echo esc_html( $hero_subtitle ); ?></p>
