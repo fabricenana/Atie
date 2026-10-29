@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildSeed } from "@/lib/demo/seed";
+import { PROVIDER_COST_CENTS_PER_MIN, TOPUP_OPTIONS } from "@/lib/domain/pricing";
 
 const now = new Date("2026-10-29T10:00:00Z");
 const s = buildSeed(now);
@@ -55,12 +56,19 @@ describe("données de démonstration", () => {
     for (const o of s.organizations) expect(o.transcriptsEnabled).toBe(false);
   });
 
-  it("respectent la grille tarifaire : Starter confirmé, Premium hypothèse", () => {
-    const starter = s.plans.find((p) => p.code === "starter")!;
-    const premium = s.plans.find((p) => p.code === "premium")!;
-    expect([starter.monthlyPriceCents, starter.includedMinutes, starter.approval]).toEqual([990, 15, "confirmed"]);
-    expect([premium.monthlyPriceCents, premium.includedMinutes, premium.approval]).toEqual([7990, 250, "hypothesis"]);
-    expect(s.plans.filter((p) => p.approval === "confirmed")).toHaveLength(1);
+  it("respectent la grille tarifaire validée le 29 oct. 2026", () => {
+    const grid = Object.fromEntries(s.plans.map((p) => [p.code, [p.monthlyPriceCents, p.includedMinutes, p.approval, p.active]]));
+    expect(grid).toEqual({
+      starter: [1200, 15, "confirmed", true],
+      essentiel: [2990, 50, "confirmed", true],
+      premium: [8900, 150, "confirmed", true],
+      business: [24900, 450, "confirmed", true],
+    });
+  });
+
+  it("vendent chaque minute au moins deux fois son coût fournisseur estimé", () => {
+    for (const p of s.plans) expect(p.monthlyPriceCents / p.includedMinutes).toBeGreaterThanOrEqual(2 * PROVIDER_COST_CENTS_PER_MIN);
+    for (const o of TOPUP_OPTIONS) expect(o.priceCents / o.minutes).toBeGreaterThanOrEqual(2 * PROVIDER_COST_CENTS_PER_MIN);
   });
 
   it("dérivent les agrégats quotidiens des conversations (une seule source)", () => {

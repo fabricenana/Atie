@@ -73,6 +73,26 @@ function atie_presence_personas() {
 }
 
 /**
+ * Price grid shown on the page, validated on 29 Oct 2026. Same grid as the console
+ * (presence-console/lib/domain/pricing.ts). Filter: atie_presence_plans.
+ *
+ * @return array{plans:array<int, array{name:string,price:string,minutes:int,sessions:int,text:string,featured:bool}>,topup:array{price:string,minutes:int}}
+ */
+function atie_presence_plans() {
+	$grid = array(
+		'plans' => array(
+			array( 'name' => 'Starter', 'price' => '12', 'minutes' => 15, 'sessions' => 1, 'text' => __( 'Pour un petit site : quelques échanges par mois.', 'atie' ), 'featured' => false ),
+			array( 'name' => 'Essentiel', 'price' => '29.90', 'minutes' => 50, 'sessions' => 1, 'text' => __( 'Pour un accueil régulier sur un site actif.', 'atie' ), 'featured' => true ),
+			array( 'name' => 'Premium', 'price' => '89', 'minutes' => 150, 'sessions' => 2, 'text' => __( 'Pour les entreprises qui reçoivent beaucoup de visiteurs.', 'atie' ), 'featured' => false ),
+			array( 'name' => 'Business', 'price' => '249', 'minutes' => 450, 'sessions' => 4, 'text' => __( 'Grands volumes et plusieurs conversations en même temps.', 'atie' ), 'featured' => false ),
+		),
+		'topup' => array( 'price' => '19', 'minutes' => 30 ),
+	);
+
+	return apply_filters( 'atie_presence_plans', $grid );
+}
+
+/**
  * Customizer: one image per receptionist.
  *
  * @param WP_Customize_Manager $wp_customize Customizer.

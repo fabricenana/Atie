@@ -185,8 +185,8 @@ export default async function SubscriptionsPage({ searchParams }: { searchParams
                   </li>
                 ))}
               </ul>
-              <Notice kind="warning" className="mt-5" title="Tarifs non définitifs">
-                Seul Starter (CHF 9.90, 15 min) est confirmé. Premium (CHF 79.90, 250 min) est une hypothèse ; les autres formules sont internes et ne doivent pas être publiées.
+              <Notice kind="info" className="mt-5" title="Grille validée le 29 oct. 2026">
+                Starter CHF 12 / 15 min, Essentiel CHF 29.90 / 50 min, Premium CHF 89 / 150 min, Business CHF 249 / 450 min, recharge CHF 19 / 30 min. Coût fournisseur estimé : environ CHF 0.23 par minute.
               </Notice>
             </CardBody>
           </Card>

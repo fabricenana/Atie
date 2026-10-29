@@ -164,6 +164,52 @@ while ( have_posts() ) :
 			</div>
 		</section>
 
+		<?php $grid = atie_presence_plans(); ?>
+		<section class="presence-pricing" id="tarifs">
+			<div class="presence-wrap">
+				<h2 class="presence-h2"><?php esc_html_e( 'Tarifs', 'atie' ); ?></h2>
+				<p class="presence-pricing__lead"><?php esc_html_e( 'Un abonnement mensuel avec des minutes de conversation incluses. Sans engagement, prix en CHF.', 'atie' ); ?></p>
+				<ul class="presence-plans">
+					<?php foreach ( $grid['plans'] as $plan ) : ?>
+						<li class="presence-plan<?php echo $plan['featured'] ? ' presence-plan--featured' : ''; ?>">
+							<?php if ( $plan['featured'] ) : ?>
+								<span class="presence-plan__badge"><?php esc_html_e( 'Recommandé', 'atie' ); ?></span>
+							<?php endif; ?>
+							<h3 class="presence-plan__name"><?php echo esc_html( $plan['name'] ); ?></h3>
+							<p class="presence-plan__price">
+								<span class="presence-plan__currency">CHF</span>
+								<span class="presence-plan__amount"><?php echo esc_html( $plan['price'] ); ?></span>
+								<span class="presence-plan__period"><?php esc_html_e( '/ mois', 'atie' ); ?></span>
+							</p>
+							<p class="presence-plan__text"><?php echo esc_html( $plan['text'] ); ?></p>
+							<ul class="presence-plan__features">
+								<?php /* translators: %d: minutes of conversation included per month */ ?>
+								<li><?php echo esc_html( sprintf( __( '%d minutes de conversation par mois', 'atie' ), $plan['minutes'] ) ); ?></li>
+								<li>
+									<?php
+									echo esc_html(
+										1 === $plan['sessions']
+											? __( '1 conversation à la fois', 'atie' )
+											/* translators: %d: simultaneous conversations */
+											: sprintf( __( '%d conversations en même temps', 'atie' ), $plan['sessions'] )
+									);
+									?>
+								</li>
+								<li><?php esc_html_e( 'Français, allemand, italien, anglais', 'atie' ); ?></li>
+							</ul>
+							<a class="btn <?php echo $plan['featured'] ? 'btn--primary' : 'presence-btn--ghost'; ?> presence-plan__cta" href="<?php echo esc_url( add_query_arg( 'formule', strtolower( $plan['name'] ), $contact ) ); ?>"><?php esc_html_e( 'Choisir', 'atie' ); ?></a>
+						</li>
+					<?php endforeach; ?>
+				</ul>
+				<p class="presence-note">
+					<?php
+					/* translators: 1: top-up price in CHF, 2: minutes */
+					echo esc_html( sprintf( __( 'Besoin de plus ? Recharge de %2$d minutes pour CHF %1$s, à tout moment. Mise en place de votre réceptionniste sur devis.', 'atie' ), $grid['topup']['price'], $grid['topup']['minutes'] ) );
+					?>
+				</p>
+			</div>
+		</section>
+
 		<section class="presence-trust">
 			<div class="presence-wrap">
 				<div class="presence-trust__box">

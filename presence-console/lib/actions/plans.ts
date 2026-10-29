@@ -31,7 +31,7 @@ const planSchema = z.object({
   price: z
     .string()
     .trim()
-    .regex(/^\d{1,5}([.,]\d{1,2})?$/, "Montant en CHF, par exemple 79.90."),
+    .regex(/^\d{1,5}([.,]\d{1,2})?$/, "Montant en CHF, par exemple 89.00."),
   includedMinutes: z.coerce.number().int("Nombre entier.").min(0, "Valeur positive.").max(100000, "Valeur trop élevée."),
   concurrentSessions: z.coerce.number().int("Nombre entier.").min(1, "Au moins 1.").max(50, "50 au plus."),
   approval: z.enum(["confirmed", "hypothesis", "draft"], { message: "Statut invalide." }),

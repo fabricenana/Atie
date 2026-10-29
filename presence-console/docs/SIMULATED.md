@@ -15,7 +15,7 @@ boutons désactivés avec explication).
 |---|---|
 | Entreprises, personnes, chiffres, demandes visiteurs | Fictifs (domaines `.example`, noms suffixés « (démo) ») |
 | Sessions, minutes, statistiques | Générées par `lib/demo/seed.ts` (graine fixe). En production : backend Python |
-| Coût fournisseur par session | **Estimation** de démonstration (CHF 0.12/min), badge « Estimé » |
+| Coût fournisseur par session | **Estimation** (CHF 0.23/min, `lib/domain/pricing.ts`), badge « Estimé » |
 | Pool de minutes LiveKit / LemonSlice | **Aucune donnée** : affiché « — », fournisseur non connecté |
 | Factures, avoirs, paiements | Numéros `DEMO-…`, « sans valeur comptable » ; aucune facture officielle |
 | Transcriptions | **Aucune** : jamais générées, désactivées par défaut pour toutes les entreprises |

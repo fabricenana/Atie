@@ -140,6 +140,32 @@
 .presence-step__title { margin-top: 14px; font-size: 18px; font-weight: 600; color: var(--p-text); }
 .presence-step__text { margin: 8px 0 0; font-size: 14.5px; line-height: 1.55; color: var(--p-muted); }
 
+/* ---- Pricing ----------------------------------------------------------- */
+.presence-pricing { padding: clamp(28px, 5vh, 56px) 0; scroll-margin-top: 110px; }
+.presence-pricing__lead { margin: 8px 0 0; max-width: 640px; color: var(--p-muted); }
+.presence-plans { list-style: none; margin: 20px 0 0; padding: 0; display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+.presence-plan {
+	position: relative; display: flex; flex-direction: column;
+	padding: 24px; border-radius: 18px; background: var(--p-panel); border: 1px solid var(--p-line);
+}
+.presence-plan--featured { border-color: rgba(227, 30, 36, 0.7); background: radial-gradient(120% 90% at 0% 0%, rgba(227, 30, 36, 0.16), rgba(227, 30, 36, 0) 60%), var(--p-panel); }
+.presence-plan__badge {
+	position: absolute; top: -11px; left: 24px; padding: 3px 10px; border-radius: 999px;
+	background: var(--red); color: #fff; font-family: var(--font-ui); font-weight: 600; font-size: 11.5px; letter-spacing: 0.04em;
+}
+.presence-plan__name { font-size: 18px; font-weight: 600; color: var(--p-text); }
+.presence-plan__price { display: flex; align-items: baseline; gap: 6px; margin: 12px 0 0; }
+.presence-plan__currency { font-family: var(--font-ui); font-size: 13px; font-weight: 600; color: var(--p-muted); }
+.presence-plan__amount { font-size: 36px; font-weight: 600; line-height: 1; color: var(--p-text); }
+.presence-plan__period { font-size: 14px; color: var(--p-muted); }
+.presence-plan__text { margin: 10px 0 0; font-size: 14px; line-height: 1.5; color: var(--p-muted); }
+.presence-plan__features { list-style: none; margin: 16px 0 20px; padding: 0; display: grid; gap: 8px; }
+.presence-plan__features li { position: relative; padding-left: 20px; font-size: 14px; line-height: 1.45; color: #d4d4d8; }
+.presence-plan__features li::before {
+	content: ""; position: absolute; left: 2px; top: 0.5em; width: 7px; height: 7px; background: var(--red); transform: rotate(45deg);
+}
+.presence-plan__cta { margin-top: auto; justify-content: center; }
+
 /* ---- Trust ------------------------------------------------------------- */
 .presence-trust { padding: clamp(28px, 5vh, 56px) 0; }
 .presence-trust__box {
@@ -163,13 +189,16 @@
 
 /* ---- Responsive -------------------------------------------------------- */
 @media (max-width: 1024px) {
-	.presence-gallery { grid-template-columns: repeat(2, 1fr); }
+	.presence-gallery,
+	.presence-plans { grid-template-columns: repeat(2, 1fr); }
 }
 @media (max-width: 760px) {
 	.presence-actions,
 	.presence-steps__list,
 	.presence-trust__box,
-	.presence-trust__list { grid-template-columns: 1fr; }
+	.presence-trust__list,
+	.presence-plans { grid-template-columns: 1fr; }
+	.presence-plans { gap: 24px; }
 	.presence-action { flex-direction: row; align-items: center; padding: 16px; }
 	.presence-action__icon { width: 44px; height: 44px; flex: none; }
 }

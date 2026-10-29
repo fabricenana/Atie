@@ -24,7 +24,7 @@ export function PlanForm({ plan, readOnly }: { plan?: Plan; readOnly: boolean })
           required
           inputMode="decimal"
           defaultValue={plan ? (plan.monthlyPriceCents / 100).toFixed(2) : ""}
-          placeholder="79.90"
+          placeholder="89.00"
           hint="Facturation mensuelle, sans frais d’installation."
         />
         <TextField label="Minutes incluses" name="includedMinutes" type="number" min={0} required defaultValue={plan?.includedMinutes} />

@@ -7,11 +7,8 @@ import { readStore } from "../demo/store";
  * de la session (fournie par requireClient), jamais par un paramètre d'URL.
  */
 
-/** Recharges proposées en démonstration : prix indicatifs, non approuvés. */
-export const TOPUP_OPTIONS = [
-  { minutes: 50, priceCents: 1500 },
-  { minutes: 100, priceCents: 2900 },
-] as const;
+/** Recharges proposées : grille validée (lib/domain/pricing.ts). */
+export { TOPUP_OPTIONS } from "../domain/pricing";
 
 /** Répartition des langues des visiteurs (conversations abouties). */
 export function visitorLanguagesForOrg(orgId: ID, sinceIso?: string) {

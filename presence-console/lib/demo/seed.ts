@@ -16,6 +16,7 @@ import type {
   SessionStatus,
   UsageRecord,
 } from "../domain/types";
+import { PLAN_GRID, PROVIDER_COST_CENTS_PER_MIN } from "../domain/pricing";
 
 export const SEED_VERSION = 1;
 
@@ -77,15 +78,10 @@ export function buildSeed(now: Date = new Date()): DemoStore {
   ];
 
   // -------------------------------------------------------------------------
-  // Offres : seul Starter est un tarif confirmé.
+  // Offres : grille validée (lib/domain/pricing.ts).
   // -------------------------------------------------------------------------
-  const planDates = { createdAt: iso(nowMs - 365 * DAY), updatedAt: iso(nowMs - 20 * DAY) };
-  const plans: DemoStore["plans"] = [
-    { id: "pln_starter", code: "starter", name: "Starter", monthlyPriceCents: 990, includedMinutes: 15, concurrentSessions: 1, approval: "confirmed", active: true, description: "Pour découvrir ATIE Presence sur un petit site.", ...planDates },
-    { id: "pln_essentiel", code: "essentiel", name: "Essentiel", monthlyPriceCents: 2990, includedMinutes: 60, concurrentSessions: 1, approval: "draft", active: true, description: "Formule intermédiaire — paramètres internes, non publiés.", ...planDates },
-    { id: "pln_premium", code: "premium", name: "Premium", monthlyPriceCents: 7990, includedMinutes: 250, concurrentSessions: 2, approval: "hypothesis", active: true, description: "Forfait central — hypothèse tarifaire à valider.", ...planDates },
-    { id: "pln_business", code: "business", name: "Business", monthlyPriceCents: 19900, includedMinutes: 750, concurrentSessions: 4, approval: "draft", active: false, description: "Grands volumes — paramètres internes, non publiés.", ...planDates },
-  ];
+  const planDates = { createdAt: iso(nowMs - 365 * DAY), updatedAt: iso(nowMs - 1 * DAY) };
+  const plans: DemoStore["plans"] = PLAN_GRID.map((p) => ({ id: `pln_${p.code}`, ...p, approval: "confirmed", active: true, ...planDates }));
 
   // -------------------------------------------------------------------------
   // Entreprises fictives
@@ -311,8 +307,8 @@ export function buildSeed(now: Date = new Date()): DemoStore {
       id, organizationId, receptionistId: rcp.id, backendSessionId: `demo-${id}`,
       startedAt: iso(start), endedAt: ended ? iso(start + seconds * 1000) : null,
       durationSeconds: seconds, lang, status, endReason, billableSeconds: billable,
-      // Coût fournisseur : estimation de démonstration (CHF 0.12/min), jamais une mesure.
-      providerCostCents: Math.round((billable / 60) * 12), providerCostOrigin: "estimated",
+      // Coût fournisseur : estimation (PROVIDER_COST_CENTS_PER_MIN), jamais une mesure.
+      providerCostCents: Math.round((billable / 60) * PROVIDER_COST_CENTS_PER_MIN), providerCostOrigin: "estimated",
       error, transcriptAvailable: false,
     });
     const ev = (type: ConversationEvent["type"], at: number, detail: string) =>
@@ -416,8 +412,8 @@ export function buildSeed(now: Date = new Date()): DemoStore {
     }));
 
   const minuteTopups: DemoStore["minuteTopups"] = [
-    { id: "top_1", organizationId: "org_chalet", minutes: 100, priceCents: 2900, status: "pending", requestedAt: iso(nowMs - 1 * DAY), appliedAt: null, requestedBy: "usr_chalet_admin" },
-    { id: "top_2", organizationId: "org_lumiere", minutes: 50, priceCents: 1500, status: "applied", requestedAt: iso(nowMs - 40 * DAY), appliedAt: iso(nowMs - 39 * DAY), requestedBy: "usr_lumiere_admin" },
+    { id: "top_1", organizationId: "org_chalet", minutes: 30, priceCents: 1900, status: "pending", requestedAt: iso(nowMs - 1 * DAY), appliedAt: null, requestedBy: "usr_chalet_admin" },
+    { id: "top_2", organizationId: "org_lumiere", minutes: 30, priceCents: 1900, status: "applied", requestedAt: iso(nowMs - 40 * DAY), appliedAt: iso(nowMs - 39 * DAY), requestedBy: "usr_lumiere_admin" },
   ];
   const concurrencyEntitlements: DemoStore["concurrencyEntitlements"] = [
     { id: "cce_1", organizationId: "org_chalet", extraSessions: 1, monthlyPriceCents: 1990, status: "requested", startsAt: iso(periodEnd) },
@@ -453,9 +449,9 @@ export function buildSeed(now: Date = new Date()): DemoStore {
   });
   invoices.push({
     id: "inv_topup_1", organizationId: "org_lumiere", number: `DEMO-${now.getUTCFullYear()}-R001`, issuedAt: iso(nowMs - 39 * DAY), dueAt: iso(nowMs - 9 * DAY),
-    status: "paid", kind: "invoice", lines: [{ label: "Recharge 50 minutes", quantity: 1, unitPriceCents: 1500 }], totalCents: 1500,
+    status: "paid", kind: "invoice", lines: [{ label: "Recharge 30 minutes", quantity: 1, unitPriceCents: 1900 }], totalCents: 1900,
   });
-  payments.push({ id: `pay_${payments.length + 1}`, invoiceId: "inv_topup_1", organizationId: "org_lumiere", amountCents: 1500, method: "card", status: "recorded", at: iso(nowMs - 30 * DAY) });
+  payments.push({ id: `pay_${payments.length + 1}`, invoiceId: "inv_topup_1", organizationId: "org_lumiere", amountCents: 1900, method: "card", status: "recorded", at: iso(nowMs - 30 * DAY) });
 
   // -------------------------------------------------------------------------
   // Demandes visiteurs (résumés fictifs, pas de transcription)
@@ -495,7 +491,7 @@ export function buildSeed(now: Date = new Date()): DemoStore {
     ["org_moser", "usr_ops", "receptionist.create", "Maya (brouillon)", "Réceptionniste en brouillon", 3],
     ["org_chalet", "usr_ops", "receptionist.update", "Maya", "Durée maximale portée à 4 min", 3],
     ["org_lumiere", "usr_ops", "knowledge.update", "Horaires du cabinet", "Version 2", 2],
-    [null, "usr_super", "plan.update", "Premium", "Hypothèse tarifaire CHF 79.90 / 250 min", 20],
+    [null, "usr_super", "plan.update", "Premium", "Grille validée : CHF 89 / 150 min", 1],
   ].map(([organizationId, actorId, action, target, detail, d], i) => ({
     id: `aud_${i + 1}`, organizationId: organizationId as string | null, actorId: actorId as string, action: action as string,
     target: target as string, detail: detail as string, at: iso(nowMs - (d as number) * DAY - i * 3600_000),
