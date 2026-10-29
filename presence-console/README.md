@@ -7,40 +7,63 @@ Application web unique, multi-rôles, pour gérer ATIE Presence :
 - **ATIE Client** (`/client`) : tableau de bord, réceptionniste, demandes des visiteurs,
   consommation, abonnement, entreprise, assistance.
 
-> **Démonstration, non connectée.** Données fictives, aucun appel à LiveKit, LemonSlice,
-> au backend Python ou à un prestataire de paiement, aucune opération payante.
-> Voir [`docs/SIMULATED.md`](docs/SIMULATED.md).
+Connexion réelle (Supabase Auth, e-mail + mot de passe) et données réelles (PostgreSQL
+Supabase, schéma `atie`). Ce qui n'est pas encore branché (backend Python, paiements…)
+est listé dans [`docs/NON-CONNECTE.md`](docs/NON-CONNECTE.md) : la console affiche alors
+des états vides, jamais de chiffres inventés.
 
 Le dossier est autonome : il ne modifie ni le thème WordPress (`../atie-theme`), ni
 le script de publication (`../outils/publier.sh` n'archive que `atie-theme/`).
 
+## Configuration (serveur uniquement)
+
+| Variable | Rôle |
+|---|---|
+| `DATABASE_URL` | PostgreSQL Supabase, pooler **de session** (port 5432), utilisateur `postgres` |
+| `SUPABASE_URL` | URL du projet Supabase (API Auth) |
+| `SUPABASE_ANON_KEY` | clé publique : connexion, mot de passe oublié, définition du mot de passe |
+| `SUPABASE_SERVICE_ROLE_KEY` | clé de service : invitations (création de comptes par ATIE) |
+| `ATIE_SESSION_SECRET` | clé de signature des sessions (32 caractères au moins ; obligatoire en production) |
+| `ATIE_CONSOLE_URL` | facultative : adresse publique de la console pour les liens e-mail (sinon déduite de la requête) |
+| `DATABASE_CA_CERT` | facultative : certificat (PEM) de l'autorité Supabase, pour vérifier TLS ; sans elle la connexion est chiffrée sans vérification de l'autorité |
+| `DATABASE_POOL_MAX` | facultative : taille du pool (5 par défaut) |
+
+Aucune n'est préfixée `NEXT_PUBLIC_` ; aucune n'est journalisée ni envoyée au navigateur.
+
+Côté Supabase (tableau de bord › Authentication › URL Configuration), ajouter
+`https://<console>/connexion/nouveau-mot-de-passe` aux **Redirect URLs** : c'est la page
+de retour des liens « mot de passe oublié » et d'invitation.
+
+## Mise en service
+
+1. Base : `db/migrations/001_atie_schema.sql` (déjà appliquée), puis
+   `psql "$DATABASE_URL" -X -v ON_ERROR_STOP=1 -f db/migrations/002_app_role.sql`
+   (rôle `atie_app` pour la RLS client, table `settings`, avatars Léa et Maya).
+2. Premier super administrateur (variables d'environnement ci-dessus définies) :
+
+   ```bash
+   node scripts/bootstrap-admin.mjs fabricendongo1986@gmail.com "Fabrice Ndongo"
+   ```
+
+   Le script est rejouable : il invite le compte dans Supabase Auth s'il n'existe pas
+   (e-mail avec lien de définition du mot de passe) et crée la ligne `atie.users`
+   (`super_admin`, `idp_subject` = identifiant Supabase). Aucun secret n'est affiché.
+3. Ouvrir le lien reçu, définir le mot de passe, se connecter sur `/connexion`.
+   Les autres comptes (personnel ATIE, utilisateurs clients) se créent ensuite depuis la
+   console (Paramètres › Utilisateurs, fiche entreprise › Utilisateurs). Il n'y a pas
+   d'inscription publique.
+
 ## Démarrage local
 
-Prérequis : Node.js 20.9 ou plus récent.
+Prérequis : Node.js 20.9 ou plus récent, et les variables ci-dessus (base de développement).
 
 ```bash
 cd presence-console
 npm install
-npm run dev
+npm run dev        # http://localhost:3100
 ```
 
-Ouvrir <http://localhost:3100>, puis choisir un profil de démonstration :
-
-| Profil | Espace | Pour voir |
-|---|---|---|
-| Direction ATIE (démo) — super administrateur | Admin | tout, dont formules et réinitialisation |
-| Camille Admin (démo) — administrateur ATIE | Admin | gestion courante, sans formules |
-| Noah Opérateur (démo) — opérateur ATIE | Admin | exploitation, sans suspension ni facturation |
-| Hôtel Chalet du Lac — Marc Favre | Client | quota presque épuisé, recharge en attente |
-| Cabinet dentaire Lumière — Dr Claire Morel | Client | client actif, demandes visiteurs |
-| Cabinet dentaire Lumière — Inès Secrétariat | Client | lecture seule |
-| Garage des Alpes — Luca Bonvin | Client | service suspendu, facture échue |
-| Régie Horizon — Sophie Rochat | Client | période d'essai |
-
 Version optimisée : `npm run build && npm start`.
-
-Données de démonstration : régénérées automatiquement dans `.demo-data/` (hors Git).
-Réinitialisation : `npm run demo:reset`, puis redémarrer.
 
 ## Commandes
 
@@ -48,83 +71,52 @@ Réinitialisation : `npm run demo:reset`, puis redémarrer.
 |---|---|
 | `npm run dev` | serveur de développement (port 3100) |
 | `npm run typecheck` | TypeScript strict |
-| `npm test` | tests unitaires (Vitest) |
+| `npm test` | tests (Vitest) sur PostgreSQL en mémoire (PGlite) : migrations, repositories, RLS, connexion, actions |
 | `npm run build` | build de production |
 | `npm run validate` | typecheck + tests + build |
-| `npm run test:e2e` | parcours navigateur (serveur lancé ; nécessite Playwright : `npm i -D playwright && npx playwright install chromium`) |
-| `npm run demo:reset` | efface les données de démonstration locales |
+| `npm run bootstrap:admin -- <e-mail> "<Nom>"` | amorçage du premier super administrateur |
+| `npm run test:e2e` | parcours navigateur — **hors service**, à réécrire pour la connexion réelle (voir `scripts/e2e.mjs`) |
 
-## Pages construites
+## Fonctionnement
 
-**Admin**
+- **Connexion** (`/connexion`) : la console envoie e-mail et mot de passe à l'API Auth de
+  Supabase (côté serveur, clé anon), retrouve `atie.users` par `idp_subject` (statut
+  `active`), puis ouvre sa propre session signée (cookie httpOnly, `Secure` en production,
+  durée réglable dans Paramètres › Sécurité). La session Supabase est révoquée aussitôt.
+  Messages d'erreur génériques ; 5 tentatives par quart d'heure et par couple IP + e-mail.
+- **Mot de passe oublié** (`/connexion/mot-de-passe-oublie`) et **définition du mot de
+  passe** (`/connexion/nouveau-mot-de-passe`) : lien e-mail Supabase ; une invitation
+  acceptée active le compte.
+- **Données** : `lib/db` (node-postgres). Personnel ATIE : transaction en rôle propriétaire,
+  droits vérifiés dans le code. Client : `SET LOCAL ROLE atie_app` +
+  `app.current_org_id` = entreprise de la session : la RLS filtre réellement. Chaque action
+  écrit son entrée d'audit dans la même transaction.
 
-| Route | Contenu |
-|---|---|
-| `/admin` | Tableau de bord : entreprises (actives, essai, suspendues), réceptionnistes, sessions jour / 7 j / 30 j, minutes, sessions actives et pic simultané, revenus mensuels récurrents, recharges, pool fournisseur (non connecté), alertes de quotas, incidents, activité ; graphiques et filtre de période |
-| `/admin/entreprises` | Tableau : recherche, filtres, tri, pagination, menu d'actions |
-| `/admin/entreprises/nouvelle` | Création validée |
-| `/admin/entreprises/[id]?tab=` | Fiche à 8 onglets : général, domaines, réceptionniste, Knowledge Base, abonnement et quotas, sessions, utilisateurs, historique ; suspension / réactivation |
-| `/admin/receptionnistes` | Catalogue visuel |
-| `/admin/receptionnistes/nouvelle` | Création à partir d'un avatar existant (Léa, Maya) |
-| `/admin/receptionnistes/[id]` | Configuration complète + aperçu du widget sans session |
-| `/admin/connaissances` | Knowledge Bases par entreprise |
-| `/admin/connaissances/[orgId]` | Sources : texte, URL, PDF/DOCX, catégories, statuts d'indexation |
-| `/admin/connaissances/[orgId]/[sourceId]` | Consultation, modification versionnée, historique, suppression |
-| `/admin/sessions` | Conversations : entreprise, réceptionniste, date, durée, langue, statut, motif, minutes, coût estimé, erreurs |
-| `/admin/sessions/[id]` | Détail et chronologie d'une session |
-| `/admin/sessions/actives` | Suivi des sessions en cours, fermetures non confirmées, 7 états |
-| `/admin/integrations` | Installations du widget |
-| `/admin/integrations/[orgId]` | Script d'intégration, WordPress, aperçu mobile / ordinateur, domaines, configuration |
-| `/admin/abonnements?tab=` | Formules, abonnements, recharges, concurrence ; quotas clients séparés des minutes fournisseurs |
-| `/admin/abonnements/formules/nouvelle`, `/[id]` | Création et modification de formule |
-| `/admin/facturation?tab=` | Factures, paiements, avoirs, recharges, paramètres, prestataire ; export CSV |
-| `/admin/facturation/[id]` | Détail d'une facture de démonstration |
-| `/admin/parametres?section=` | Profil, utilisateurs internes, rôles et permissions, plateforme, langues, notifications, alertes, audit, fournisseurs, état des services, sécurité |
+## Pages
 
-**Client**
+**Admin** : `/admin` (tableau de bord), `/admin/entreprises` (+ `nouvelle`, `[id]` à 8 onglets),
+`/admin/receptionnistes` (+ `nouvelle`, `[id]`), `/admin/connaissances` (+ `[orgId]`, `[orgId]/[sourceId]`),
+`/admin/sessions` (+ `[id]`, `actives`), `/admin/integrations` (+ `[orgId]`),
+`/admin/abonnements` (+ `formules/nouvelle`, `formules/[id]`), `/admin/facturation` (+ `[id]`, export CSV),
+`/admin/parametres`.
 
-| Route | Contenu |
-|---|---|
-| `/client` | Tableau de bord : réceptionniste, statut, minutes (jauge), sessions, langues, dernières demandes, abonnement, alerte de quota |
-| `/client/receptionniste` | Portrait, langues, statut, aperçu du widget, sites, présentation, « Demander une modification » |
-| `/client/demandes?tab=` | Demandes des visiteurs, interactions, notifications ; protection des données |
-| `/client/consommation` | Minutes incluses / utilisées / restantes, historique quotidien et mensuel, durée moyenne, capacité simultanée |
-| `/client/abonnement` | Formule, montant, échéance, options, recharges et changement de formule en mode demande, factures |
-| `/client/entreprise` | Coordonnées, responsable, domaines, notifications, facturation, utilisateurs |
-| `/client/assistance` | Modification, problème, minutes supplémentaires, contact ; historique |
-
-Captures d'écran : [`docs/captures/`](docs/captures).
+**Client** : `/client`, `/client/receptionniste`, `/client/demandes`, `/client/consommation`,
+`/client/abonnement`, `/client/entreprise`, `/client/assistance`.
 
 ## Documentation
 
-- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) : architecture, choix techniques, composants partagés, sécurité.
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) : architecture, choix techniques, sécurité.
 - [`docs/API-CONTRACTS.md`](docs/API-CONTRACTS.md) : contrats avec le backend Python et correspondance des repositories.
-- [`docs/PERMISSIONS.md`](docs/PERMISSIONS.md) : matrice des rôles et règles d'accès.
-- [`docs/SIMULATED.md`](docs/SIMULATED.md) : liste précise de ce qui est simulé.
-- [`db/schema.sql`](db/schema.sql) : schéma PostgreSQL cible (22 entités, contraintes, index, RLS multi-tenant).
+- [`docs/PERMISSIONS.md`](docs/PERMISSIONS.md) : matrice des rôles, règles d'accès, RLS.
+- [`docs/NON-CONNECTE.md`](docs/NON-CONNECTE.md) : ce qui n'est pas encore branché.
+- [`db/schema.sql`](db/schema.sql), [`db/migrations/`](db/migrations) : schéma PostgreSQL et migrations.
 
 ## Validation
 
-Au moment de la livraison :
+- `npm run validate` : typecheck sans erreur, 71 tests réussis (9 fichiers), build de 33 routes.
+- Les tests appliquent les vraies migrations 001 et 002 sur PGlite (PostgreSQL 17 en WASM) ;
+  seuls les éléments fournis par Supabase sont recréés (rôles `anon` / `authenticated`,
+  schéma `extensions`). L'API Auth est simulée (faux `fetch`) : aucun appel réseau.
 
-- `npm run typecheck` : aucune erreur.
-- `npm test` : 25 tests unitaires réussis (matrice des rôles, session signée et expiration, isolation multi-tenant, quotas, invariants des données de démonstration, absence de secrets).
-- `npm run build` : 31 routes compilées.
-- `scripts/e2e.mjs` (Chromium) : 374/374 vérifications — 49 routes admin et 11 routes client sans erreur JavaScript, redirections anonymes, cloisonnement admin/client, isolation entre entreprises par URL, export CSV protégé, recherche et validation de formulaire, persistance du thème, absence de débordement horizontal sur 14 pages aux largeurs 320, 360, 390, 430, 768, 1024, 1440 et 1920 px.
-- `db/schema.sql` appliqué sans erreur sur PostgreSQL 16 (24 tables, 15 politiques RLS).
-
-Non vérifié dans cette livraison : la suite Phase 2 (202 tests) et le Development Harness
-— le dossier `phase2/` n'était pas accessible depuis l'environnement de développement ;
-lecteurs d'écran réels (seuls les attributs ARIA et la navigation clavier de base ont été contrôlés) ;
-navigateurs autres que Chromium.
-
-## Prochaines étapes d'intégration
-
-1. **Confronter les contrats à `phase2/`** : vérifier les endpoints `/admin/*` proposés dans `docs/API-CONTRACTS.md` avec l'API FastAPI réelle, AGENTS.md et CLAUDE.md, puis lancer la suite des 202 tests.
-2. **Authentification** : brancher `lib/auth/session.ts` sur un fournisseur d'identité (double facteur pour ATIE) ; supprimer `/connexion` démo.
-3. **Base de données** : appliquer `db/schema.sql`, réimplémenter `lib/repositories/*` et `lib/actions/*` sur PostgreSQL (transactions, `SET LOCAL app.current_org_id`).
-4. **Backend Python** : définir `ATIE_API_URL` et `ATIE_API_SERVICE_TOKEN` (serveur), brancher `quotaForOrg`, sessions et sessions actives sur `lib/api/backend.ts`.
-5. **Synchronisation tenants** : relier `organizations` / `receptionists` à `config/tenants.json` (ou à son remplaçant).
-6. **Knowledge Base** : stockage objet des fichiers, extraction, indexation vectorielle (pgvector) filtrée par entreprise.
-7. **Paiement** : choisir un prestataire, webhooks idempotents vers `payments` ; numérotation officielle des factures.
-8. **Widget** : publier le script sur un CDN, renseigner `data-api`, activer le contrôle réel des domaines.
+Non vérifié : la connexion au vrai projet Supabase (base et API Auth), l'envoi effectif des
+e-mails, le script d'amorçage contre une vraie base, le parcours navigateur (`scripts/e2e.mjs`).

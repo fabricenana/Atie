@@ -23,7 +23,6 @@ Source unique : `lib/auth/permissions.ts`. Ce tableau est généré à partir de
 | Modifier les paramètres plateforme (`settings.write`) | ✓ |  |  |  |  |
 | Gérer les utilisateurs internes (`users.manage`) | ✓ |  |  |  |  |
 | Consulter le journal d’audit (`audit.read`) | ✓ | ✓ |  |  |  |
-| Réinitialiser la démonstration (`demo.reset`) | ✓ |  |  |  |  |
 | Accéder à l’espace client (`client.access`) |  |  |  | ✓ | ✓ |
 | Traiter les demandes visiteurs (`client.requests.update`) |  |  |  | ✓ |  |
 | Modifier les informations de l’entreprise (`client.org.write`) |  |  |  | ✓ |  |
@@ -36,9 +35,15 @@ Source unique : `lib/auth/permissions.ts`. Ce tableau est généré à partir de
 - **Séparation des espaces.** Un rôle ATIE est redirigé hors de `/client`, un rôle entreprise hors de `/admin`. Les deux ensembles de permissions sont disjoints (vérifié par `tests/permissions.test.ts`).
 - **Pas de changement de tenant.** L'espace client ne reçoit aucun identifiant d'entreprise par l'URL ni par les formulaires : l'entreprise est déduite de l'appartenance de l'utilisateur (`organization_users`). Les actions client vérifient en plus que l'objet modifié appartient à cette entreprise.
 - **Accès par URL.** Les objets enfants sont toujours lus « dans » leur entreprise (`getKnowledgeSourceForOrg(orgId, id)`) : modifier un identifiant dans l'URL renvoie une 404.
-- **Expiration.** La session est signée (HMAC-SHA256) et porte une date d'expiration (`PlatformSettings.sessionTimeoutMinutes`, 30 min par défaut). Cookie `httpOnly`, `SameSite=Lax`, `Secure` en production.
-- **Audit.** Les actions administratives (création, modification, suspension, changement de formule, recharges, avoirs, réinitialisation…) ajoutent une entrée au journal d'audit, sans secret ni contenu sensible.
+- **Expiration.** La session est signée (HMAC-SHA256) et porte une date d'expiration (`PlatformSettings.sessionTimeoutMinutes`, 30 min par défaut). Cookie `httpOnly`, `SameSite=Lax`, `Secure` en production. L'utilisateur est relu en base à chaque requête : un compte désactivé perd l'accès immédiatement.
+- **Base (RLS).** L'espace client lit et écrit en rôle `atie_app` avec `app.current_org_id` = entreprise de la session (`db/migrations/002_app_role.sql`) : même une requête sans filtre ne renvoie que cette entreprise. Le rôle n'a accès ni aux Knowledge Bases, ni aux paiements, ni au journal d'audit (écriture seule), ni aux coûts fournisseurs.
+- **Audit.** Les actions (création, modification, suspension, changement de formule, recharges, avoirs, invitations, connexions…) ajoutent une entrée au journal d'audit dans la même transaction, sans secret ni contenu sensible (l'adresse IP n'est conservée que sous forme d'empreinte).
 
-## Mode démonstration
+## Comptes et connexion
 
-`/connexion` propose un **sélecteur de profils fictifs**. Ce n'est **pas** une authentification : il n'y a pas de mot de passe. En production, `lib/auth/session.ts` sera branché sur un fournisseur d'identité (identifiants personnels, double facteur obligatoire pour le personnel ATIE, SSO éventuel). Les fonctions `requireAdmin`, `requireClient` et `assertPermission` ne changent pas.
+- Connexion par e-mail et mot de passe (Supabase Auth). Il n'y a pas d'inscription publique.
+- Les comptes sont créés par ATIE : personnel (Paramètres › Utilisateurs, `users.manage`) et
+  utilisateurs clients (fiche entreprise, `org.write`). Chaque création envoie une invitation
+  Supabase ; le compte reste « invité » jusqu'à la définition du mot de passe.
+- Premier super administrateur : `scripts/bootstrap-admin.mjs`.
+- Double authentification : réglage prévu (Paramètres › Sécurité), pas encore appliqué à la connexion.

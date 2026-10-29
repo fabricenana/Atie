@@ -1,51 +1,44 @@
-# Fonctionnalités simulées ou non connectées
+# Ce qui n'est pas encore connecté
 
-La console est **fonctionnelle en démonstration** : navigation, recherche, filtres, tri,
-pagination, formulaires validés, confirmations, notifications et contrôles d'accès
-fonctionnent réellement. Les écritures sont enregistrées **localement** dans
-`.demo-data/store.json` (hors Git) et apparaissent dans le journal d'audit.
+La console fonctionne sur de vraies données : connexion Supabase Auth, PostgreSQL
+(schéma `atie`), écritures transactionnelles avec audit, RLS pour l'espace client.
 
-Ce qui suit n'est **pas** opérationnel et est signalé comme tel dans l'interface
-(bandeau « Mode démonstration », badges `Démo` / `Estimé`, encadrés « non connecté »,
-boutons désactivés avec explication).
+Ce qui suit dépend de services non encore branchés. L'interface l'indique (encadrés
+« non connecté », états vides) et **n'invente aucun chiffre**.
 
-## Données
+## Backend Python (Phase 2 : FastAPI + agent LiveKit)
 
 | Élément | État |
 |---|---|
-| Entreprises, personnes, chiffres, demandes visiteurs | Fictifs (domaines `.example`, noms suffixés « (démo) ») |
-| Sessions, minutes, statistiques | Générées par `lib/demo/seed.ts` (graine fixe). En production : backend Python |
-| Coût fournisseur par session | **Estimation** (CHF 0.23/min, `lib/domain/pricing.ts`), badge « Estimé » |
-| Pool de minutes LiveKit / LemonSlice | **Aucune donnée** : affiché « — », fournisseur non connecté |
-| Factures, avoirs, paiements | Numéros `DEMO-…`, « sans valeur comptable » ; aucune facture officielle |
-| Transcriptions | **Aucune** : jamais générées, désactivées par défaut pour toutes les entreprises |
+| Conversations, sessions actives, minutes, durées | Lues dans `atie.conversations`, **écrite par le backend**. Tant qu'il n'y écrit rien : listes et graphiques vides, minutes utilisées = 0 |
+| Coût fournisseur par session | `provider_cost_cents` renseigné par le backend ; « — » sinon |
+| Consommation LiveKit / LemonSlice (pool) | `atie.provider_usage`, vide : « non connecté » |
+| Incidents, état des services | Aucune source : liste vide, fournisseurs « non connecté » |
+| Configuration des réceptionnistes | Enregistrée en base ; **pas transmise** automatiquement à l'agent Python ni à LemonSlice |
+| Suspension d'une entreprise | Change le statut en base ; le backend n'en est pas informé automatiquement |
+| « Forcer la fermeture » d'une session | Désactivé : relèvera de `POST /admin/sessions/{id}/close` |
+| Synchronisation `config/tenants.json` | À définir (organizations.slug = tenant_id) |
+| `ATIE_API_URL`, `ATIE_API_SERVICE_TOKEN` | Préparés (`lib/api/backend.ts`), non utilisés |
 
-## Actions
+## Paiements et facturation
 
-| Action | Comportement actuel |
+| Élément | État |
 |---|---|
-| Connexion | Sélecteur de profils fictifs — **pas une authentification** |
-| Suspension / réactivation d'une entreprise | Change le statut local ; n'interrompt aucun service réel |
-| Configuration d'une réceptionniste | Enregistrée localement ; rien n'est envoyé à l'agent Python ni à LemonSlice |
-| Création de réceptionniste | Uniquement à partir des avatars existants Léa et Maya ; aucun avatar créé |
-| Aperçu du widget | Maquette statique ; bouton « Démarrer » désactivé (aucune session payante) |
-| Knowledge Base : ajout de texte | Enregistré localement, statut « Démo — non indexé » |
-| Knowledge Base : ajout d'URL | Seule la référence est enregistrée ; la page n'est pas téléchargée |
-| Knowledge Base : import PDF/DOCX | Seuls le nom et la taille sont conservés ; le contenu n'est ni lu ni stocké |
-| Indexation, recherche sémantique, RAG | Non connectés (préparés : statuts, versions, schéma) |
-| Vérification de domaine | Simulée : aucune requête DNS/HTTP |
-| Invitation d'utilisateur | Crée un compte « invité » local ; aucun e-mail |
-| Sessions actives : « Forcer la fermeture » | Désactivé ; relèvera de l'API Python |
-| Intégration du widget | Script généré avec `data-api` en placeholder ; rien n'est publié |
-| Formules, abonnements, recharges, concurrence | Modifications locales ; aucune opération financière |
-| « Marquer payée », « Émettre un avoir » | Libellés « (démo) » ; aucun paiement ni document comptable |
 | Prestataire de paiement | Non choisi, non connecté |
-| Demandes client (modification, minutes, changement de formule) | Mode **demande** : crée une demande de support et une notification |
-| Notifications e-mail | Aucune n'est envoyée |
-| État des fournisseurs | « Non configuré / non connecté » ; aucune clé n'est lue ni affichée |
-| Module rendez-vous | « Disponible lorsqu'un module compatible sera connecté » |
+| Factures | Aucune émission automatique ; seules les factures saisies existent |
+| « Marquer payée » | Enregistre un règlement **constaté manuellement** ; rien n'est encaissé |
+| Avoirs | Enregistrés en base ; aucun remboursement déclenché |
+| Recharges, changement de formule (client) | Mode **demande** : ATIE valide depuis le back-office |
 
-## Réinitialiser la démonstration
+## Autres
 
-- Depuis l'interface : *Paramètres › Sécurité › Réinitialiser les données de démonstration* (super administrateur).
-- En ligne de commande : `npm run demo:reset`, puis redémarrer le serveur.
+| Élément | État |
+|---|---|
+| Knowledge Base : indexation, recherche, RAG | Sources et versions enregistrées, statut « en attente d'indexation » |
+| Knowledge Base : URL | Seule la référence est enregistrée ; la page n'est pas téléchargée |
+| Knowledge Base : PDF/DOCX | Seuls le nom et la taille sont conservés ; pas de stockage objet |
+| Vérification de domaine | Manuelle (ATIE marque le domaine vérifié) ; aucune requête DNS/HTTP |
+| Widget | Script généré ; rien n'est publié ; `data-api` à renseigner |
+| E-mails d'alerte et de notification | Préférences enregistrées ; aucun envoi (seuls les e-mails Supabase Auth partent : invitation, mot de passe oublié) |
+| Double authentification | Réglage enregistré, **pas encore appliqué** à la connexion |
+| Parcours navigateur `scripts/e2e.mjs` | À réécrire pour des comptes de test réels |

@@ -1,11 +1,12 @@
 # Contrats de données et d'API — console ↔ backend Python
 
-Ce document décrit comment la console (Next.js) se branchera au backend existant
-(Phase 2, FastAPI + agent LiveKit) et à la future base PostgreSQL (`db/schema.sql`).
+Ce document décrit comment la console (Next.js) se branche à la base PostgreSQL Supabase
+(schéma `atie`, `db/schema.sql` + `db/migrations/`) et se branchera au backend existant
+(Phase 2, FastAPI + agent LiveKit).
 
-> **État : non connecté.** Toutes les données affichées viennent du store de démonstration
-> local (`lib/demo/store.ts`). Aucun appel n'est fait au backend, à LiveKit, à LemonSlice
-> ni à un prestataire de paiement.
+> **État.** La console lit et écrit PostgreSQL (Supabase) et authentifie par Supabase Auth.
+> Aucun appel n'est fait au backend Python, à LiveKit, à LemonSlice ni à un prestataire de
+> paiement (voir `docs/NON-CONNECTE.md`).
 
 > **Audit Phase 2 non réalisé.** Le dossier `phase2/` (API FastAPI, 202 tests, `AGENTS.md`,
 > `CLAUDE.md`, commit `54442a5`) n'était pas accessible depuis l'environnement de
@@ -82,23 +83,23 @@ conservation (`organizations.transcripts_enabled`), un endpoint dédié
 
 ## 4. Correspondance repositories → sources
 
-La couche `lib/repositories/index.ts` est le seul point d'accès des pages. Pour brancher
-les vraies sources, réimplémenter ces fonctions avec les mêmes signatures :
+La couche `lib/repositories/*` est le seul point d'accès des pages (fonctions asynchrones,
+portée personnel ou entreprise déduite de la session). Sources actuelles et cibles :
 
 | Fonction | Source cible |
 |---|---|
 | `listOrganizations`, `getOrganization`, `listDomainsForOrg`, `listOrgUsers` | PostgreSQL |
 | `listReceptionists`, `getReceptionist`, `listAvatars` | PostgreSQL (synchronisé vers `config/tenants.json` ou API Python) |
 | `listKnowledgeForOrg`, `getKnowledgeSourceForOrg` | PostgreSQL (+ stockage objet pour PDF/DOCX, index vectoriel futur) |
-| `listConversations*`, `listLiveSessions`, `listConversationEvents` | API Python `/admin/sessions*` (ou réplique PostgreSQL alimentée par le backend) |
-| `listUsage*`, `quotaForOrg` | API Python `/admin/tenants/{id}/usage*` |
-| `listProviderUsage`, `listProviderStatuses` | API Python `/admin/providers/*` |
+| `listConversations*`, `listLiveSessions`, `listConversationEvents` | PostgreSQL `conversations` / `conversation_events`, **écrites par le backend Python** (vides tant qu'il n'écrit rien) |
+| `listUsage*`, `quotaForOrg`, `listQuotas` | Dérivés en SQL de `conversations` (période de l'abonnement) ; à terme confrontés à `/admin/tenants/{id}/usage*` |
+| `listProviderUsage`, `listProviderStatuses` | `provider_usage` (vide) ; état « non connecté » ; à terme API Python `/admin/providers/*` |
 | `listPlans`, `listSubscriptions`, `listTopups`, `listInvoices*`, `listPayments` | PostgreSQL (+ futur prestataire de paiement via webhooks idempotents) |
 | `listVisitorRequestsForOrg`, `listSupportRequests`, `listNotifications`, `listAuditEvents` | PostgreSQL |
 
-Les actions serveur (`lib/actions/*.ts`) écrivent aujourd'hui dans le store de démo via
-`mutateStore`. En production, elles écriront dans PostgreSQL dans une transaction avec
-`SET LOCAL app.current_org_id` (RLS) et l'entrée d'audit correspondante.
+Les actions serveur (`lib/actions/*.ts`) écrivent dans PostgreSQL, dans une transaction qui
+contient aussi l'entrée d'audit : `withStaff` pour le personnel ATIE (permission vérifiée
+avant), `withOrg` pour un client (`SET LOCAL ROLE atie_app` + `app.current_org_id`, RLS).
 
 ## 5. Isolation multi-tenant
 
@@ -108,16 +109,20 @@ Les actions serveur (`lib/actions/*.ts`) écrivent aujourd'hui dans le store de 
 2. Back-office : les routes portent un identifiant d'entreprise, mais chaque lecture
    d'objet enfant vérifie qu'il appartient bien à cette entreprise (ex.
    `getKnowledgeSourceForOrg(orgId, sourceId)` → 404 sinon).
-3. Base : RLS sur toutes les tables métier (`db/schema.sql`), en défense en profondeur.
+3. Base : RLS sur les tables métier (`db/schema.sql`) et sur les tables lues par un client sans
+   `organization_id` direct (`db/migrations/002_app_role.sql`), appliquée réellement par le rôle `atie_app`.
 
 ## 6. Variables d'environnement prévues (serveur uniquement)
 
 | Variable | Rôle |
 |---|---|
-| `ATIE_API_URL` | URL du backend Python (non définie : mode démo) |
+| `ATIE_API_URL` | URL du backend Python (non utilisée pour l'instant) |
 | `ATIE_API_SERVICE_TOKEN` | jeton de service console → backend |
 | `ATIE_SESSION_SECRET` | clé de signature des sessions (≥ 32 caractères) |
-| `DATABASE_URL` | PostgreSQL (non utilisé dans cette livraison) |
-| `ATIE_DEMO_DATA_DIR` | emplacement des données de démonstration locales |
+| `DATABASE_URL` | PostgreSQL Supabase (pooler de session), utilisateur `postgres` |
+| `SUPABASE_URL`, `SUPABASE_ANON_KEY` | API Auth : connexion, mot de passe oublié |
+| `SUPABASE_SERVICE_ROLE_KEY` | API Auth admin : invitations |
+| `ATIE_CONSOLE_URL` | facultative : adresse publique pour les liens e-mail |
+| `DATABASE_CA_CERT` | facultative : vérification TLS de la base |
 
 Aucune de ces variables n'est préfixée `NEXT_PUBLIC_` : elles ne peuvent pas atteindre le navigateur.
