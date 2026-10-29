@@ -61,6 +61,7 @@
       mic: 'Micro', micOn: 'Micro activé', micOff: 'Micro coupé', captions: 'Sous-titres', close: 'Fermer', open: 'Ouvrir la réceptionniste',
       lang: 'Langue', end: 'Terminer', quotaLow: 'Cette réceptionniste sera bientôt indisponible. Vous pouvez aussi nous contacter directement.',
       unavailable: 'La réceptionniste n’est pas disponible pour le moment.', saturated: 'La réceptionniste est déjà en conversation. Réessayez dans un instant.',
+      trialUsed: 'Vous avez déjà profité de votre essai gratuit aujourd’hui. Parlons de votre projet : écrivez-nous.',
       micDenied: 'Le micro n’est pas autorisé. Vous pouvez l’activer dans votre navigateur, ou nous laisser un message.',
       failed: 'La connexion a échoué.', ended: 'Conversation terminée. Merci !', timeUp: 'Durée maximale atteinte, la conversation est terminée.',
       fallback: 'Laisser un message', contact: 'Contacter l’entreprise',
@@ -75,6 +76,7 @@
       mic: 'Mikrofon', micOn: 'Mikrofon an', micOff: 'Mikrofon aus', captions: 'Untertitel', close: 'Schliessen', open: 'Empfang öffnen',
       lang: 'Sprache', end: 'Beenden', quotaLow: 'Diese Empfangsmitarbeiterin ist bald nicht mehr verfügbar. Sie können uns auch direkt kontaktieren.',
       unavailable: 'Die Empfangsmitarbeiterin ist momentan nicht verfügbar.', saturated: 'Die Empfangsmitarbeiterin ist gerade im Gespräch. Bitte versuchen Sie es gleich noch einmal.',
+      trialUsed: 'Sie haben Ihren kostenlosen Test heute bereits genutzt. Sprechen wir über Ihr Projekt: Schreiben Sie uns.',
       micDenied: 'Das Mikrofon ist nicht erlaubt. Sie können es im Browser aktivieren oder uns eine Nachricht hinterlassen.',
       failed: 'Die Verbindung ist fehlgeschlagen.', ended: 'Gespräch beendet. Vielen Dank!', timeUp: 'Maximale Dauer erreicht, das Gespräch ist beendet.',
       fallback: 'Nachricht hinterlassen', contact: 'Unternehmen kontaktieren',
@@ -89,6 +91,7 @@
       mic: 'Microfono', micOn: 'Microfono attivo', micOff: 'Microfono spento', captions: 'Sottotitoli', close: 'Chiudi', open: 'Apri la receptionist',
       lang: 'Lingua', end: 'Termina', quotaLow: 'Questa receptionist sarà presto non disponibile. Puoi anche contattarci direttamente.',
       unavailable: 'La receptionist non è al momento disponibile.', saturated: 'La receptionist è già in conversazione. Riprova tra un istante.',
+      trialUsed: 'Hai già usato la tua prova gratuita di oggi. Parliamo del tuo progetto: scrivici.',
       micDenied: 'Il microfono non è autorizzato. Puoi attivarlo nel browser oppure lasciarci un messaggio.',
       failed: 'La connessione non è riuscita.', ended: 'Conversazione terminata. Grazie!', timeUp: 'Durata massima raggiunta, la conversazione è terminata.',
       fallback: 'Lascia un messaggio', contact: 'Contatta l’azienda',
@@ -103,6 +106,7 @@
       mic: 'Microphone', micOn: 'Microphone on', micOff: 'Microphone off', captions: 'Captions', close: 'Close', open: 'Open the receptionist',
       lang: 'Language', end: 'End', quotaLow: 'This receptionist will soon be unavailable. You can also contact us directly.',
       unavailable: 'The receptionist is not available right now.', saturated: 'The receptionist is already in a conversation. Please try again shortly.',
+      trialUsed: 'You have already used today’s free trial. Let’s talk about your project: write to us.',
       micDenied: 'Microphone access is not allowed. You can enable it in your browser, or leave us a message.',
       failed: 'The connection failed.', ended: 'Conversation ended. Thank you!', timeUp: 'Maximum duration reached, the conversation has ended.',
       fallback: 'Leave a message', contact: 'Contact the company',
@@ -392,6 +396,12 @@
         return api('/session', 'POST', { tenant_id: cfg.tenant, language: cfg.lang });
       }, function () { throw { kind: 'mic' }; })
       .then(function (r) {
+        // 429 « trial_limit » : l'essai gratuit du jour est déjà utilisé (sinon : réceptionniste occupée).
+        if (r.status !== 429) return r;
+        return r.json().catch(function () { return {}; }).then(function (b) { r.trial = !!(b && b.detail && b.detail.code === 'trial_limit'); return r; });
+      })
+      .then(function (r) {
+        if (r.trial) throw { kind: 'trial' };
         if (r.status === 429) throw { kind: 'saturated' };
         if (!r.ok) throw { kind: 'unavailable' };
         return r.json();
@@ -411,6 +421,7 @@
         teardown(cur);
         if (kind === 'mic') backToStart(t.micDenied, true);
         else if (kind === 'saturated') backToStart(t.saturated, true);
+        else if (kind === 'trial') backToStart(t.trialUsed, true);
         else if (kind === 'unavailable') backToStart(t.unavailable, true);
         else if (e && e.message === 'stale') resetPanel();
         else backToStart(t.failed + ' ' + t.unavailable, true);
@@ -523,6 +534,7 @@
   // Change d'avatar (nom, image, dessin) hors conversation : la page peut présenter plusieurs réceptionnistes.
   function setPersona(p) {
     if (S || !p) return false;
+    if (p.tenant) cfg.tenant = p.tenant;
     cfg.name = p.name || cfg.name; cfg.image = p.image || ''; cfg.idleSrc = p.video || ''; cfg.variant = p.variant === 'marco' ? 'marco' : 'lea';
     [bubble, stage].forEach(function (box) {
       var old = box.querySelector(':scope > .face, :scope > .media');

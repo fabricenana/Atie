@@ -6,8 +6,8 @@
  * Dark "product showcase" layout: welcome, three action cards, featured
  * receptionists as large portraits, then how it works and trust.
  * The page content (editor) is shown under the welcome when it is not empty.
- * The receptionist widget runs in simulated demo mode here: no microphone,
- * no network call, no paid session (see inc/presence.php).
+ * With live trials on (Customizer), visitors talk one minute with Léa or Maya;
+ * off, the page leads to the contact page (see inc/presence.php).
  *
  * @package ATIE
  */
@@ -20,6 +20,7 @@ get_header();
 
 $contact  = atie_presence_contact_url();
 $personas = atie_presence_personas();
+$live     = atie_presence_trials_enabled();
 
 $actions = array(
 	array(
@@ -36,13 +37,21 @@ $actions = array(
 		'href'  => '#receptionnistes',
 		'open'  => false,
 	),
-	array(
-		'tone'  => 'blue',
-		'icon'  => '<rect x="4" y="5" width="16" height="14" rx="2.5"/><path d="M8 10l2.5 2L8 14M12.5 14H16"/>',
-		'label' => __( 'Essayer la démonstration', 'atie' ),
-		'href'  => '',
-		'open'  => true,
-	),
+	$live
+		? array(
+			'tone'  => 'blue',
+			'icon'  => '<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/>',
+			'label' => __( 'Parler à une réceptionniste', 'atie' ),
+			'href'  => '',
+			'open'  => true,
+		)
+		: array(
+			'tone'  => 'blue',
+			'icon'  => '<rect x="4" y="5" width="16" height="14" rx="2.5"/><path d="M8 10h8M8 14h5"/>',
+			'label' => __( 'Voir les tarifs', 'atie' ),
+			'href'  => '#tarifs',
+			'open'  => false,
+		),
 );
 
 $steps = array(
@@ -112,14 +121,20 @@ while ( have_posts() ) :
 				<div class="presence-gallery">
 					<?php foreach ( $personas as $persona ) : ?>
 						<article class="presence-card">
-							<button type="button" class="presence-card__hit" data-presence-open="<?php echo esc_attr( $persona['id'] ); ?>">
-								<span class="screen-reader-text"><?php echo esc_html( sprintf( /* translators: %s: receptionist name. */ __( 'Essayer avec %s', 'atie' ), $persona['name'] ) ); ?></span>
-							</button>
+							<?php if ( $live ) : ?>
+								<button type="button" class="presence-card__hit" data-presence-open="<?php echo esc_attr( $persona['id'] ); ?>">
+									<span class="screen-reader-text"><?php echo esc_html( sprintf( /* translators: %s: receptionist name. */ __( 'Parler avec %s pendant une minute', 'atie' ), $persona['name'] ) ); ?></span>
+								</button>
+							<?php else : ?>
+								<a class="presence-card__hit" href="<?php echo esc_url( add_query_arg( 'receptionniste', $persona['id'], $contact ) ); ?>">
+									<span class="screen-reader-text"><?php echo esc_html( sprintf( /* translators: %s: receptionist name. */ __( 'Demander %s pour votre site', 'atie' ), $persona['name'] ) ); ?></span>
+								</a>
+							<?php endif; ?>
 							<div class="presence-card__media">
 								<?php if ( $persona['video'] ) : ?>
 									<video src="<?php echo esc_url( $persona['video'] ); ?>" poster="<?php echo esc_url( $persona['image'] ); ?>" muted loop playsinline autoplay preload="metadata" aria-hidden="true" width="416" height="672"></video>
 								<?php elseif ( $persona['image'] ) : ?>
-									<img src="<?php echo esc_url( $persona['image'] ); ?>" alt="<?php echo esc_attr( sprintf( /* translators: %s: receptionist name. */ __( 'Portrait de %s, réceptionniste fictive', 'atie' ), $persona['name'] ) ); ?>" loading="lazy" width="900" height="1221">
+									<img src="<?php echo esc_url( $persona['image'] ); ?>" alt="<?php echo esc_attr( sprintf( /* translators: %s: receptionist name. */ __( 'Portrait de %s, réceptionniste ATIE Presence', 'atie' ), $persona['name'] ) ); ?>" loading="lazy" width="900" height="1221">
 								<?php else : ?>
 									<div class="presence-card__face" data-presence-face="<?php echo esc_attr( $persona['variant'] ); ?>" aria-hidden="true"></div>
 								<?php endif; ?>
@@ -133,7 +148,18 @@ while ( have_posts() ) :
 								<h3 class="presence-card__name"><?php echo esc_html( $persona['name'] ); ?></h3>
 								<p class="presence-card__role"><?php echo esc_html( $persona['role'] ); ?> · <span><?php echo esc_html( $persona['company'] ); ?></span></p>
 								<p class="presence-card__text"><?php echo esc_html( $persona['greeting'] ); ?></p>
-								<span class="presence-card__try" aria-hidden="true"><?php echo esc_html( sprintf( /* translators: %s: receptionist name. */ __( 'Essayer avec %s', 'atie' ), $persona['name'] ) ); ?> ›</span>
+								<span class="presence-card__try" aria-hidden="true">
+									<?php
+									echo esc_html(
+										$live
+											/* translators: %s: receptionist name. */
+											? sprintf( __( 'Parler avec %s · 1 min', 'atie' ), $persona['name'] )
+											/* translators: %s: receptionist name. */
+											: sprintf( __( '%s pour votre site', 'atie' ), $persona['name'] )
+									);
+									?>
+									›
+								</span>
 							</div>
 						</article>
 					<?php endforeach; ?>
@@ -145,7 +171,15 @@ while ( have_posts() ) :
 						<span class="presence-card__try"><?php esc_html_e( 'En parler avec nous', 'atie' ); ?> ›</span>
 					</a>
 				</div>
-				<p class="presence-note"><?php esc_html_e( 'Entreprises fictives, à titre de démonstration. Démonstration simulée : aucune connexion, aucun micro.', 'atie' ); ?></p>
+				<p class="presence-note">
+					<?php
+					echo esc_html(
+						$live
+							? __( 'Essai gratuit d’une minute par jour, sans inscription. Le micro n’est demandé qu’au moment de commencer. Entreprises présentées à titre d’exemple.', 'atie' )
+							: __( 'Entreprises présentées à titre d’exemple.', 'atie' )
+					);
+					?>
+				</p>
 			</div>
 		</section>
 
@@ -231,7 +265,7 @@ while ( have_posts() ) :
 					<a class="btn btn--primary" href="<?php echo esc_url( $contact ); ?>"><?php esc_html_e( 'Nous contacter', 'atie' ); ?></a>
 					<?php if ( function_exists( 'atie_console_url' ) ) : ?>
 						<a class="btn presence-btn--ghost" href="<?php echo esc_url( atie_console_url() ); ?>" target="_blank" rel="noopener">
-							<?php esc_html_e( 'Voir la console (démo)', 'atie' ); ?>
+							<?php esc_html_e( 'Espace client', 'atie' ); ?>
 							<span class="screen-reader-text"><?php esc_html_e( '(nouvel onglet)', 'atie' ); ?></span>
 						</a>
 					<?php endif; ?>

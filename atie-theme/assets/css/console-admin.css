@@ -6,27 +6,12 @@
 .atie-console__lead { font-size: 14px; color: #50575e; max-width: 760px; }
 .atie-console__open { margin: 18px 0 8px; }
 .atie-console__notice { margin: 16px 0 8px; max-width: 900px; }
-.atie-console__toc { display: flex; flex-wrap: wrap; gap: 8px; margin: 20px 0 8px; }
-
-.atie-console__group { margin-top: 36px; }
-.atie-console__group h2 { font-size: 20px; margin: 0 0 6px; }
-.atie-console__intro { color: #50575e; max-width: 760px; margin: 0 0 16px; }
-
-.atie-console__grid {
-	list-style: none; margin: 0; padding: 0;
-	display: grid; gap: 20px;
-	grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
+.atie-console__areas {
+	list-style: none; margin: 20px 0 0; padding: 0;
+	display: grid; gap: 16px; max-width: 900px;
+	grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
 }
-.atie-console__card {
-	margin: 0; display: flex; flex-direction: column;
-	background: #fff; border: 1px solid #dcdcde; border-radius: 10px; overflow: hidden;
-	transition: border-color .15s ease, box-shadow .15s ease;
-}
-.atie-console__card:hover { border-color: #e31e24; box-shadow: 0 6px 20px -10px rgba(20, 20, 20, .35); }
-.atie-console__shot { display: block; height: 220px; overflow: hidden; background: #f0f0f1; border-bottom: 1px solid #dcdcde; }
-.atie-console__shot img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: top center; }
-.atie-console__shot:focus-visible { outline: 3px solid #e31e24; outline-offset: -3px; }
-.atie-console__meta { padding: 12px 14px 14px; }
-.atie-console__meta h3 { font-size: 14px; margin: 0 0 4px; }
+.atie-console__card { margin: 0; background: #fff; border: 1px solid #dcdcde; border-radius: 10px; }
+.atie-console__meta { padding: 14px 16px 16px; }
+.atie-console__meta h3 { font-size: 15px; margin: 0 0 6px; }
 .atie-console__meta p { margin: 0; color: #50575e; font-size: 13px; line-height: 1.5; }
-
