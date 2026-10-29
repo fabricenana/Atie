@@ -4,8 +4,8 @@
  *
  * The console itself (back-office ATIE + client area) is a separate Next.js
  * application (presence-console/ in the repository): WordPress cannot run it.
- * This page only shows screenshots of its screens, to administrators, inside
- * wp-admin. Nothing is added to the public site, no request leaves the server.
+ * It is hosted at console.atie.ch (demo data). This page links to it and shows
+ * screenshots of its screens, to administrators, inside wp-admin.
  *
  * @package ATIE
  */
@@ -15,6 +15,15 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 const ATIE_CONSOLE_PAGE = 'atie-console';
+
+/**
+ * Public address of the hosted console (demo). Filter: atie_console_url.
+ *
+ * @return string
+ */
+function atie_console_url() {
+	return (string) apply_filters( 'atie_console_url', 'https://console.atie.ch/' );
+}
 
 /**
  * Screens shown on the page, grouped by area. Files: assets/img/console/<file>.jpg.
@@ -101,15 +110,22 @@ function atie_console_render() {
 	$screens = atie_console_screens();
 	?>
 	<div class="wrap atie-console">
-		<h1><?php esc_html_e( 'Console ATIE Presence — aperçu', 'atie' ); ?></h1>
+		<h1><?php esc_html_e( 'Console ATIE Presence', 'atie' ); ?></h1>
 		<p class="atie-console__lead">
-			<?php esc_html_e( 'Captures de la console en cours de développement : back-office ATIE et espace client. Données entièrement fictives.', 'atie' ); ?>
+			<?php esc_html_e( 'Back-office ATIE et espace client, en démonstration avec des données entièrement fictives.', 'atie' ); ?>
+		</p>
+
+		<p class="atie-console__open">
+			<a class="button button-primary button-hero" href="<?php echo esc_url( atie_console_url() ); ?>" target="_blank" rel="noopener">
+				<?php esc_html_e( 'Ouvrir la console', 'atie' ); ?>
+				<span class="screen-reader-text"><?php esc_html_e( '(nouvel onglet)', 'atie' ); ?></span>
+			</a>
 		</p>
 
 		<div class="notice notice-info inline atie-console__notice">
 			<p>
-				<strong><?php esc_html_e( 'Aperçu seulement.', 'atie' ); ?></strong>
-				<?php esc_html_e( 'La console est une application Node.js séparée (dossier presence-console du dépôt) : elle ne tourne pas dans WordPress et n’est connectée à aucun service. Cette page n’est visible que par les administrateurs et n’ajoute rien au site public.', 'atie' ); ?>
+				<strong><?php esc_html_e( 'Démonstration publique.', 'atie' ); ?></strong>
+				<?php esc_html_e( 'La console est une application Node.js séparée, hébergée à part : elle ne tourne pas dans WordPress et n’est connectée à aucun service (LiveKit, LemonSlice, paiement). Tout visiteur peut choisir un profil de démonstration.', 'atie' ); ?>
 			</p>
 		</div>
 
@@ -141,15 +157,6 @@ function atie_console_render() {
 			</section>
 		<?php endforeach; ?>
 
-		<section class="atie-console__group">
-			<h2><?php esc_html_e( 'Essayer la console sur votre ordinateur', 'atie' ); ?></h2>
-			<p class="atie-console__intro"><?php esc_html_e( 'Version navigable complète (formulaires, filtres, rôles), sur la branche claude/presence-console du dépôt. Node.js 20.9 ou plus récent :', 'atie' ); ?></p>
-			<pre class="atie-console__code">git checkout claude/presence-console
-cd presence-console
-npm install
-npm run dev</pre>
-			<p class="atie-console__intro"><?php esc_html_e( 'Puis ouvrir http://localhost:3100 et choisir un profil de démonstration.', 'atie' ); ?></p>
-		</section>
 	</div>
 	<?php
 }

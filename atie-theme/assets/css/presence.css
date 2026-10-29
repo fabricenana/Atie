@@ -157,6 +157,9 @@
 /* ---- Closing call to action ------------------------------------------- */
 .presence-cta { padding-top: clamp(40px, 7vh, 80px); text-align: center; }
 .presence-cta__text { margin: 12px auto 24px; max-width: 560px; color: var(--p-muted); }
+.presence-cta__actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; }
+.presence-btn--ghost { background: transparent; color: var(--p-text); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.24); }
+.presence-btn--ghost:hover { background: rgba(255, 255, 255, 0.08); }
 
 /* ---- Responsive -------------------------------------------------------- */
 @media (max-width: 1024px) {

@@ -181,7 +181,15 @@ while ( have_posts() ) :
 			<div class="presence-wrap">
 				<h2 class="presence-h2"><?php esc_html_e( 'Une réceptionniste pour votre site ?', 'atie' ); ?></h2>
 				<p class="presence-cta__text"><?php esc_html_e( 'ATIE Presence est en phase pilote. Parlons de votre accueil, de vos langues et de votre image.', 'atie' ); ?></p>
-				<a class="btn btn--primary" href="<?php echo esc_url( $contact ); ?>"><?php esc_html_e( 'Nous contacter', 'atie' ); ?></a>
+				<div class="presence-cta__actions">
+					<a class="btn btn--primary" href="<?php echo esc_url( $contact ); ?>"><?php esc_html_e( 'Nous contacter', 'atie' ); ?></a>
+					<?php if ( function_exists( 'atie_console_url' ) ) : ?>
+						<a class="btn presence-btn--ghost" href="<?php echo esc_url( atie_console_url() ); ?>" target="_blank" rel="noopener">
+							<?php esc_html_e( 'Voir la console (démo)', 'atie' ); ?>
+							<span class="screen-reader-text"><?php esc_html_e( '(nouvel onglet)', 'atie' ); ?></span>
+						</a>
+					<?php endif; ?>
+				</div>
 			</div>
 		</section>
 
