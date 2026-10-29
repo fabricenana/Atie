@@ -10,9 +10,20 @@
  * (client → admin, admin → client, viewer en lecture seule, entreprise d'un autre
  * tenant), l'absence de débordement horizontal aux 8 largeurs demandées, les
  * erreurs JavaScript, et quelques parcours (formulaires, filtres, thème).
+ *
+ * HORS SERVICE depuis le passage à Supabase Auth + PostgreSQL : ce parcours se connectait
+ * avec le sélecteur de profils fictifs (input name="uid") et des identifiants de démonstration
+ * (org_lumiere, usr_super…) qui n'existent plus. Il doit être réécrit avec des comptes de test
+ * réels (e-mail + mot de passe) et une base de recette. Il n'est pas inclus dans
+ * `npm run validate` ; il s'arrête ici avec un code d'erreur plutôt que de réussir à vide.
  */
 import { createRequire } from "node:module";
 import { mkdirSync } from "node:fs";
+
+if (!process.env.ATIE_E2E_FORCE) {
+  console.error("scripts/e2e.mjs : parcours à réécrire pour la connexion réelle (voir l'en-tête du fichier).");
+  process.exit(2);
+}
 
 const require = createRequire(import.meta.url);
 let chromium;

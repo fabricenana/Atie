@@ -1,44 +1,30 @@
 import "server-only";
-import type { DemoStore, ID } from "../domain/types";
-import { readStore } from "../demo/store";
+import type { ID, Invoice, Payment } from "../domain/types";
+import { isUuid, one, rows } from "../db";
+import { read } from "../db/scope";
+import { DEFAULT_BILLING_SETTINGS, loadBillingSettings, type BillingSettings } from "../settings";
+import { INVOICE_COLS, PAYMENT_COLS } from "./sql";
 
 /**
- * Paramètres de facturation (démo).
- * Stockés à côté des données de démonstration ; en production, ils relèveront
- * du backend commercial (voir docs/API-CONTRACTS.md).
+ * Facturation (back-office). Aucun prestataire de paiement n'est connecté :
+ * les factures et paiements n'existent que s'ils ont été saisis dans la console.
  */
-export interface BillingSettings {
-  currency: "CHF";
-  paymentTermsDays: number;
-  /** Taux de TVA en pour mille (81 = 8,1 %) pour rester en entiers. */
-  vatRatePermille: number;
-  vatNumber: string;
-  invoicePrefix: string;
-  footerNote: string;
-}
 
-export const DEFAULT_BILLING_SETTINGS: BillingSettings = {
-  currency: "CHF",
-  paymentTermsDays: 30,
-  vatRatePermille: 81,
-  vatNumber: "CHE-000.000.000 TVA (démo)",
-  invoicePrefix: "DEMO-",
-  footerNote: "Document de démonstration — sans valeur comptable.",
-};
+export { DEFAULT_BILLING_SETTINGS, type BillingSettings } from "../settings";
 
-export type StoreWithBilling = DemoStore & { billingSettings?: BillingSettings };
+export const getBillingSettings = (): Promise<BillingSettings> =>
+  read((q, scope) => (scope.kind === "staff" ? loadBillingSettings(q) : Promise.resolve({ ...DEFAULT_BILLING_SETTINGS })));
 
-export function getBillingSettings(): BillingSettings {
-  return { ...DEFAULT_BILLING_SETTINGS, ...((readStore() as StoreWithBilling).billingSettings ?? {}) };
-}
+export const getInvoice = (id: ID) =>
+  isUuid(id) ? read((q) => one<Invoice>(q, `SELECT ${INVOICE_COLS} FROM invoices i WHERE i.id = $1`, [id])) : Promise.resolve(null);
 
-export const getInvoice = (id: ID) => readStore().invoices.find((i) => i.id === id) ?? null;
 export const listPaymentsForInvoice = (invoiceId: ID) =>
-  readStore()
-    .payments.filter((p) => p.invoiceId === invoiceId)
-    .sort((a, b) => b.at.localeCompare(a.at));
+  isUuid(invoiceId)
+    ? read((q) => rows<Payment>(q, `SELECT ${PAYMENT_COLS} FROM payments pa WHERE pa.invoice_id = $1 ORDER BY pa.at DESC`, [invoiceId]))
+    : Promise.resolve([] as Payment[]);
 
 /** Nom d'une entreprise pour l'affichage (back-office uniquement). */
-export function orgNameMap(): Map<ID, string> {
-  return new Map(readStore().organizations.map((o) => [o.id, o.name]));
+export async function orgNameMap(): Promise<Map<ID, string>> {
+  const list = await read((q) => rows<{ id: ID; name: string }>(q, "SELECT o.id, o.name FROM organizations o"));
+  return new Map(list.map((o) => [o.id, o.name]));
 }

@@ -9,12 +9,12 @@ import { formatDuration, formatTime, LANG_SHORT } from "@/lib/format";
 import type { Conversation, SessionStatus } from "@/lib/domain/types";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Card, CardBody, CardHeader } from "@/components/ui/Card";
-import { Badge, OriginTag, StatusBadge } from "@/components/ui/Badge";
+import { Badge, StatusBadge } from "@/components/ui/Badge";
 import { Button, ButtonLink } from "@/components/ui/Button";
 import { Notice, NotConnected } from "@/components/ui/Notice";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Portrait } from "@/components/ui/Portrait";
-import { getAvatar } from "@/lib/repositories";
+import { listAvatars } from "@/lib/repositories";
 
 export const metadata: Metadata = { title: "Sessions actives" };
 export const dynamic = "force-dynamic";
@@ -31,16 +31,16 @@ const STATE_HELP: Record<SessionStatus, string> = {
 
 export default async function ActiveSessions() {
   await requireAdmin("session.read_all");
-  const { orgs, receptionists } = nameIndexes();
-  const all = listLiveSessions();
+  const [{ orgs, receptionists }, all, avatars] = await Promise.all([nameIndexes(), listLiveSessions(), listAvatars()]);
+  const avatarById = new Map(avatars.map((a) => [a.id, a]));
   const live = all.filter((c) => c.status !== "close_unconfirmed").sort((a, b) => a.startedAt.localeCompare(b.startedAt));
   const unconfirmed = all.filter((c) => c.status === "close_unconfirmed");
   const now = Date.now();
 
   const SessionCard = ({ c }: { c: Conversation }) => {
-    const rcp = receptionists.get(c.receptionistId);
+    const rcp = c.receptionistId ? receptionists.get(c.receptionistId) : undefined;
     const org = orgs.get(c.organizationId);
-    const avatar = rcp ? getAvatar(rcp.avatarId) : null;
+    const avatar = rcp ? avatarById.get(rcp.avatarId) ?? null : null;
     const elapsed = c.endedAt ? c.durationSeconds : Math.max(0, Math.round((now - new Date(c.startedAt).getTime()) / 1000));
     const max = rcp?.maxConversationSeconds ?? 180;
     return (
@@ -83,7 +83,6 @@ export default async function ActiveSessions() {
         title="Sessions actives"
         description={`Instantané au ${formatTime(new Date(now).toISOString())}. Les durées sont calculées côté serveur à l’affichage.`}
         breadcrumbs={[{ label: "Conversations", href: "/admin/sessions" }, { label: "Sessions actives" }]}
-        meta={<OriginTag origin="demo" />}
         actions={
           <Link href="/admin/sessions/actives" className="inline-flex h-10 items-center gap-2 rounded-lg border border-line-strong bg-surface px-4 font-ui text-sm font-medium hover:bg-surface-2">
             <RefreshCw className="size-4" aria-hidden /> Actualiser
@@ -93,8 +92,8 @@ export default async function ActiveSessions() {
 
       <NotConnected what="Suivi en temps réel">
         <span id="force-close-help">
-          Cet écran affiche les sessions de démonstration. En production, il lira l’état transmis par l’API Python, seule autorité sur les
-          sessions et les baux. La fermeture forcée passera par l’API (DELETE /session/{"{id}"}) : elle est désactivée ici.
+          Cet écran affiche les sessions écrites en base par le backend Python, seule autorité sur les sessions et les baux ; tant qu’il
+          n’écrit rien, la liste reste vide. La fermeture forcée passera par l’API (DELETE /session/{"{id}"}) : elle est désactivée ici.
         </span>
       </NotConnected>
 

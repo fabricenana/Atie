@@ -1,33 +1,41 @@
 import "server-only";
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
+import { cache } from "react";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import type { ID, Organization, Role, User } from "../domain/types";
-import { readStore } from "../demo/store";
+import { isUuid, one, withStaff } from "../db";
+import { ORG_COLS, USER_COLS } from "../repositories/sql";
 import { can, isAtieRole, type Permission } from "./permissions";
 
 /**
- * Session de DÉMONSTRATION.
+ * Session de la console.
  *
- * Le sélecteur de rôle de /connexion n'est PAS une authentification : il ouvre une
- * session signée pour un utilisateur fictif. En production, ce module sera remplacé
- * par un fournisseur d'identité (mot de passe + 2FA ou SSO), mais les contrôles
- * `requireSession` / `requirePermission` / `requireClientOrg` restent identiques.
+ * L'identité est vérifiée par Supabase Auth (lib/auth/login.ts) ; la console ouvre ensuite
+ * sa propre session : jeton signé HMAC-SHA256 (identifiant atie.users + expiration) dans un
+ * cookie httpOnly. À chaque requête, l'utilisateur est relu en base : un compte désactivé
+ * perd l'accès immédiatement.
  */
 
-export const SESSION_COOKIE = "atie_demo_session";
+export const SESSION_COOKIE = "atie_session";
 const g = globalThis as unknown as { __atieSessionKey?: Buffer };
 
 function key(): Buffer {
   const env = process.env.ATIE_SESSION_SECRET;
   if (env && env.length >= 32) return Buffer.from(env);
-  // Clé éphémère : les sessions de démo expirent au redémarrage du serveur.
+  if (process.env.NODE_ENV === "production") throw new Error("ATIE_SESSION_SECRET absente ou trop courte (32 caractères au moins).");
+  // Développement local : clé éphémère, les sessions expirent au redémarrage du serveur.
   g.__atieSessionKey ??= randomBytes(32);
   return g.__atieSessionKey;
 }
 
 function sign(payload: string) {
   return createHmac("sha256", key()).update(payload).digest("base64url");
+}
+
+/** Empreinte non réversible d'une valeur (adresse IP du journal d'audit). */
+export function fingerprint(value: string) {
+  return createHmac("sha256", key()).update(`ip:${value}`).digest("base64url").slice(0, 16);
 }
 
 export interface SessionPayload {
@@ -56,6 +64,14 @@ export function decodeSession(token: string | undefined, now = Date.now()): Sess
   }
 }
 
+export const sessionCookieOptions = (maxAgeSeconds: number) => ({
+  httpOnly: true,
+  sameSite: "lax" as const,
+  secure: process.env.NODE_ENV === "production",
+  path: "/",
+  maxAge: maxAgeSeconds,
+});
+
 export interface Viewer {
   user: User;
   role: Role;
@@ -64,24 +80,37 @@ export interface Viewer {
   expiresAt: number;
 }
 
-/** Résout le rôle et l'entreprise d'un utilisateur à partir des données serveur. */
-export function resolveViewer(uid: ID, exp: number): Viewer | null {
-  const s = readStore();
-  const user = s.users.find((u) => u.id === uid && u.status === "active");
-  if (!user) return null;
-  if (user.atieRole) return { user, role: user.atieRole, organization: null, expiresAt: exp };
-  const membership = s.organizationUsers.find((m) => m.userId === uid);
-  if (!membership) return null;
-  const organization = s.organizations.find((o) => o.id === membership.organizationId) ?? null;
-  if (!organization) return null;
-  return { user, role: membership.role, organization, expiresAt: exp };
+type ViewerRow = User & { orgRole: "org_admin" | "org_viewer" | null; orgId: ID | null };
+
+/** Résout le rôle et l'entreprise d'un utilisateur actif (lecture en base, rôle propriétaire). */
+export async function resolveViewer(uid: ID, exp: number): Promise<Viewer | null> {
+  if (!isUuid(uid)) return null;
+  return withStaff(async (q) => {
+    const row = await one<ViewerRow>(
+      q,
+      `SELECT ${USER_COLS}, m.role::text AS "orgRole", m.organization_id AS "orgId"
+         FROM users u
+         LEFT JOIN organization_users m ON m.user_id = u.id
+        WHERE u.id = $1 AND u.status = 'active'
+        ORDER BY m.created_at NULLS FIRST
+        LIMIT 1`,
+      [uid],
+    );
+    if (!row) return null;
+    const { orgRole, orgId, ...user } = row;
+    if (user.atieRole) return { user, role: user.atieRole, organization: null, expiresAt: exp };
+    if (!orgRole || !orgId) return null;
+    const organization = await one<Organization>(q, `SELECT ${ORG_COLS} FROM organizations o WHERE o.id = $1`, [orgId]);
+    return organization ? { user, role: orgRole, organization, expiresAt: exp } : null;
+  });
 }
 
-export async function getViewer(): Promise<Viewer | null> {
+/** Utilisateur de la requête en cours (mémorisé le temps du rendu). */
+export const getViewer = cache(async (): Promise<Viewer | null> => {
   const jar = await cookies();
   const p = decodeSession(jar.get(SESSION_COOKIE)?.value);
   return p ? resolveViewer(p.uid, p.exp) : null;
-}
+});
 
 export async function requireSession(): Promise<Viewer> {
   const v = await getViewer();

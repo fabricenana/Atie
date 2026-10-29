@@ -4,7 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Bell, FlaskConical, LogOut, Menu as MenuIcon, X } from "lucide-react";
+import { Bell, LogOut, Menu as MenuIcon, X } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { NAV_ICONS } from "./icons";
 import type { NavGroup } from "./nav";
@@ -157,12 +157,6 @@ export function AppShell({
       ) : null}
 
       <div className="flex min-w-0 flex-col">
-        <div className="flex items-center justify-center gap-2 border-b border-dashed border-line-strong bg-surface-2 px-4 py-1.5 text-center font-ui text-[12px] text-muted">
-          <FlaskConical className="size-3.5 shrink-0" aria-hidden />
-          <span>
-            Mode démonstration : données fictives, aucun service connecté, aucune opération payante.
-          </span>
-        </div>
         <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-line bg-bg/85 px-4 backdrop-blur-md sm:px-6 lg:px-10">
           <button type="button" onClick={() => setOpen(true)} aria-label="Ouvrir le menu" aria-expanded={open} className="-ml-1 inline-grid size-9 place-items-center rounded-lg text-muted hover:bg-surface-3 lg:hidden">
             <MenuIcon className="size-[18px]" />

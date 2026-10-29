@@ -8,7 +8,7 @@ import { formatDate, formatNumber } from "@/lib/format";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Card } from "@/components/ui/Card";
 import { DataTable, type Column, type Row } from "@/components/ui/DataTable";
-import { StatusBadge, OriginTag } from "@/components/ui/Badge";
+import { StatusBadge } from "@/components/ui/Badge";
 import { ButtonLink } from "@/components/ui/Button";
 import { Menu } from "@/components/ui/Menu";
 import { Meter } from "@/components/ui/Charts";
@@ -17,7 +17,7 @@ export const metadata: Metadata = { title: "Entreprises" };
 
 export default async function OrganizationsPage() {
   const v = await requireAdmin("org.read_all");
-  const rows = listOrganizationRows();
+  const [rows, plans] = await Promise.all([listOrganizationRows(), listPlans()]);
   const canWrite = can(v.role, "org.write");
 
   const columns: Column[] = [
@@ -87,14 +87,13 @@ export default async function OrganizationsPage() {
     },
   }));
 
-  const planNames = [...new Set(listPlans().map((p) => p.name))];
+  const planNames = [...new Set(plans.map((p) => p.name))];
 
   return (
     <>
       <PageHeader
         title="Entreprises"
         description="Toutes les entreprises clientes d’ATIE Presence, leur réceptionniste, leur formule et leur consommation sur la période en cours."
-        meta={<OriginTag origin="demo" />}
         actions={
           canWrite ? (
             <ButtonLink href="/admin/entreprises/nouvelle" variant="primary">

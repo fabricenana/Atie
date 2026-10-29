@@ -5,17 +5,21 @@ import { z } from "zod";
 import type { ActionResult } from "../action-result";
 import { fieldErrors } from "../action-result";
 import { assertPermission, ForbiddenError } from "../auth/session";
-import { mutateStore, newId } from "../demo/store";
+import { audit, isUuid, one, withStaff, type Queryable } from "../db";
 import type { Lang } from "../domain/types";
-import { audit } from "./audit";
+import { loadPlatformSettings } from "../settings";
 
 const lang = z.enum(["fr", "de", "it", "en"]);
+const optionalOrg = z
+  .string()
+  .default("")
+  .refine((x) => x === "" || isUuid(x), "Entreprise inconnue.");
 
 const configSchema = z.object({
   name: z.string().trim().min(2, "Le nom doit contenir au moins 2 caractères.").max(60),
   role: z.string().trim().min(2, "Indiquez le rôle affiché.").max(120),
-  organizationId: z.string().default(""),
-  avatarId: z.string().min(1, "Choisissez un avatar existant."),
+  organizationId: optionalOrg,
+  avatarId: z.string().refine(isUuid, "Choisissez un avatar existant."),
   voice: z.string().trim().min(2, "Indiquez la voix.").max(120),
   primaryLang: lang,
   secondaryLangs: z.array(lang).default([]),
@@ -62,60 +66,84 @@ function services(raw: string) {
     .slice(0, 30);
 }
 
+/** Contrôles communs : avatar existant, entreprise existante, une seule réceptionniste par entreprise. */
+async function check(q: Queryable, avatarId: string, organizationId: string, selfId: string | null) {
+  if (!(await one(q, "SELECT 1 FROM avatars WHERE id = $1", [avatarId]))) return "avatar" as const;
+  if (organizationId) {
+    if (!(await one(q, "SELECT 1 FROM organizations WHERE id = $1", [organizationId]))) return "org" as const;
+    const taken = await one(q, "SELECT 1 FROM receptionists WHERE organization_id = $1 AND ($2::uuid IS NULL OR id <> $2::uuid)", [organizationId, selfId]);
+    if (taken) return "taken" as const;
+  }
+  return null;
+}
+
+const CHECK_ERRORS = {
+  avatar: ["avatarId", "Avatar inconnu."],
+  org: ["organizationId", "Entreprise inconnue."],
+  taken: ["organizationId", "Une réceptionniste est déjà associée à cette entreprise."],
+} as const;
+
 export async function updateReceptionist(_: ActionResult, fd: FormData): Promise<ActionResult> {
   try {
     const v = await assertPermission("receptionist.write");
     const id = String(fd.get("id") ?? "");
+    if (!isUuid(id)) return { ok: false, message: "Réceptionniste introuvable." };
     const parsed = parse(fd);
     if (!parsed.success) return { ok: false, message: "Vérifiez les champs signalés.", errors: fieldErrors(parsed.error.issues) };
     const d = parsed.data;
     if (d.status === "live" && !d.organizationId) {
       return { ok: false, message: "Une réceptionniste en service doit être associée à une entreprise.", errors: { status: "Associez d’abord une entreprise." } };
     }
-    const r = await mutateStore((s) => {
-      const rcp = s.receptionists.find((x) => x.id === id);
-      if (!rcp) return "missing";
-      if (!s.avatars.some((a) => a.id === d.avatarId)) return "avatar";
-      if (d.organizationId && !s.organizations.some((o) => o.id === d.organizationId)) return "org";
-      if (d.organizationId && s.receptionists.some((x) => x.id !== id && x.organizationId === d.organizationId)) return "taken";
-      Object.assign(rcp, {
-        name: d.name,
-        role: d.role,
-        organizationId: d.organizationId || null,
-        avatarId: d.avatarId,
-        voice: d.voice,
-        primaryLang: d.primaryLang,
-        secondaryLangs: d.secondaryLangs.filter((l) => l !== d.primaryLang) as Lang[],
-        tone: d.tone,
-        businessInstructions: d.businessInstructions,
-        greeting: d.greeting,
-        fallbackReply: d.fallbackReply,
-        afterHoursBehavior: d.afterHoursBehavior,
-        maxConversationSeconds: Math.round(d.maxConversationMinutes * 60),
-        allowedServices: services(d.allowedServices),
-        status: d.status,
-        updatedAt: new Date().toISOString(),
-      });
-      audit(s, v.user.id, rcp.organizationId, "receptionist.update", rcp.name, "Configuration modifiée");
-      return "ok";
+    const r = await withStaff(async (q) => {
+      if (!(await one(q, "SELECT 1 FROM receptionists WHERE id = $1 FOR UPDATE", [id]))) return "missing" as const;
+      const err = await check(q, d.avatarId, d.organizationId, id);
+      if (err) return err;
+      await q.query(
+        `UPDATE receptionists SET name = $2, role = $3, organization_id = $4, avatar_id = $5, voice = $6, primary_lang = $7::lang,
+                secondary_langs = $8::lang[], tone = $9, business_instructions = $10, greeting = $11, fallback_reply = $12,
+                after_hours_behavior = $13, max_conversation_seconds = $14, allowed_services = $15::text[],
+                status = $16::receptionist_status, updated_at = now()
+          WHERE id = $1`,
+        [
+          id,
+          d.name,
+          d.role,
+          d.organizationId || null,
+          d.avatarId,
+          d.voice,
+          d.primaryLang,
+          d.secondaryLangs.filter((l) => l !== d.primaryLang),
+          d.tone,
+          d.businessInstructions,
+          d.greeting,
+          d.fallbackReply,
+          d.afterHoursBehavior,
+          Math.round(d.maxConversationMinutes * 60),
+          services(d.allowedServices),
+          d.status,
+        ],
+      );
+      await audit(q, v.user.id, d.organizationId || null, "receptionist.update", d.name, "Configuration modifiée");
+      return "ok" as const;
     });
     if (r === "missing") return { ok: false, message: "Réceptionniste introuvable." };
-    if (r === "avatar") return { ok: false, message: "Avatar inconnu.", errors: { avatarId: "Avatar inconnu." } };
-    if (r === "org") return { ok: false, message: "Entreprise inconnue.", errors: { organizationId: "Entreprise inconnue." } };
-    if (r === "taken") return { ok: false, message: "Cette entreprise a déjà une réceptionniste.", errors: { organizationId: "Une réceptionniste est déjà associée à cette entreprise." } };
+    if (r !== "ok") {
+      const [k, m] = CHECK_ERRORS[r];
+      return { ok: false, message: m, errors: { [k]: m } };
+    }
     revalidatePath(`/admin/receptionnistes/${id}`);
     revalidatePath("/admin/receptionnistes");
-    return { ok: true, message: "Configuration enregistrée (démo, non transmise à l’agent)." };
+    return { ok: true, message: "Configuration enregistrée. Elle n’est pas encore transmise automatiquement à l’agent Python." };
   } catch (e) {
     return fail(e);
   }
 }
 
 const createSchema = z.object({
-  avatarId: z.string().min(1, "Choisissez un avatar existant."),
+  avatarId: z.string().refine(isUuid, "Choisissez un avatar existant."),
   name: z.string().trim().min(2, "Le nom doit contenir au moins 2 caractères.").max(60),
   role: z.string().trim().min(2, "Indiquez le rôle affiché.").max(120),
-  organizationId: z.string().default(""),
+  organizationId: optionalOrg,
   primaryLang: lang,
 });
 
@@ -132,39 +160,33 @@ export async function createReceptionist(_: ActionResult, fd: FormData): Promise
     });
     if (!parsed.success) return { ok: false, message: "Vérifiez les champs signalés.", errors: fieldErrors(parsed.error.issues) };
     const d = parsed.data;
-    const r = await mutateStore((s) => {
-      if (!s.avatars.some((a) => a.id === d.avatarId)) return { err: "avatar" as const };
-      if (d.organizationId && !s.organizations.some((o) => o.id === d.organizationId)) return { err: "org" as const };
-      if (d.organizationId && s.receptionists.some((x) => x.organizationId === d.organizationId)) return { err: "taken" as const };
-      const now = new Date().toISOString();
-      const id = newId("rcp");
-      s.receptionists.push({
-        id,
-        organizationId: d.organizationId || null,
-        avatarId: d.avatarId,
-        name: d.name,
-        role: d.role,
-        voice: "À définir",
-        primaryLang: d.primaryLang,
-        secondaryLangs: (["fr", "de", "it", "en"] as Lang[]).filter((l) => l !== d.primaryLang),
-        tone: "Professionnelle et chaleureuse.",
-        businessInstructions: "À compléter avec l’entreprise.",
-        greeting: `Bonjour, je suis ${d.name}. Comment puis-je vous aider ?`,
-        fallbackReply: "Je n’ai pas cette information. Souhaitez-vous laisser un message à l’équipe ?",
-        afterHoursBehavior: "message",
-        maxConversationSeconds: s.settings.defaultMaxConversationSeconds,
-        allowedServices: [],
-        status: "draft",
-        lastActivityAt: null,
-        createdAt: now,
-        updatedAt: now,
-      });
-      audit(s, v.user.id, d.organizationId || null, "receptionist.create", d.name, "Réceptionniste créée en brouillon");
-      return { id };
+    const r = await withStaff(async (q) => {
+      const err = await check(q, d.avatarId, d.organizationId, null);
+      if (err) return { err: err as keyof typeof CHECK_ERRORS };
+      const settings = await loadPlatformSettings(q);
+      const row = await one<{ id: string }>(
+        q,
+        `INSERT INTO receptionists (organization_id, avatar_id, name, role, voice, primary_lang, secondary_langs, tone,
+                                    business_instructions, greeting, fallback_reply, max_conversation_seconds)
+         VALUES ($1, $2, $3, $4, 'À définir', $5::lang, $6::lang[], 'Professionnelle et chaleureuse.', 'À compléter avec l’entreprise.',
+                 $7, 'Je n’ai pas cette information. Souhaitez-vous laisser un message à l’équipe ?', $8)
+         RETURNING id`,
+        [
+          d.organizationId || null,
+          d.avatarId,
+          d.name,
+          d.role,
+          d.primaryLang,
+          (["fr", "de", "it", "en"] as Lang[]).filter((l) => l !== d.primaryLang),
+          `Bonjour, je suis ${d.name}. Comment puis-je vous aider ?`,
+          Math.min(1800, Math.max(30, settings.defaultMaxConversationSeconds)),
+        ],
+      );
+      await audit(q, v.user.id, d.organizationId || null, "receptionist.create", d.name, "Réceptionniste créée en brouillon");
+      return { id: row!.id };
     });
-    if ("err" in r) {
-      const map = { avatar: ["avatarId", "Avatar inconnu."], org: ["organizationId", "Entreprise inconnue."], taken: ["organizationId", "Cette entreprise a déjà une réceptionniste."] } as const;
-      const [k, m] = map[r.err as keyof typeof map];
+    if (r.err) {
+      const [k, m] = CHECK_ERRORS[r.err];
       return { ok: false, message: m, errors: { [k]: m } };
     }
     revalidatePath("/admin/receptionnistes");

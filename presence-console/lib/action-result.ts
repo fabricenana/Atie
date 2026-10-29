@@ -4,7 +4,7 @@ export interface ActionResult {
   message: string;
   /** Erreurs par champ (validation). */
   errors?: Record<string, string>;
-  /** Marqueur de simulation : l'action n'a eu aucun effet hors de la démo locale. */
+  /** Marqueur : l’action n’a eu aucun effet externe (service non connecté). */
   simulated?: boolean;
 }
 

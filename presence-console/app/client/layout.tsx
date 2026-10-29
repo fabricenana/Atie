@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 
 export default async function ClientLayout({ children }: { children: React.ReactNode }) {
   const v = await requireClient();
-  const unread = listNotifications(v.organization.id).filter((n) => !n.readAt).length;
+  const unread = (await listNotifications(v.organization.id)).filter((n) => !n.readAt).length;
   return (
     <AppShell
       space="client"

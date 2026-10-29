@@ -1,23 +1,26 @@
 import type { Metadata } from "next";
 import { requireAdmin } from "@/lib/auth/session";
-import { getReceptionist, listDomainsForOrg, listOrganizations, listWidgets } from "@/lib/repositories";
+import { listDomains, listOrganizations, listReceptionists, listWidgets } from "@/lib/repositories";
 import { WIDGET_STATUS } from "@/lib/labels";
 import { formatRelative } from "@/lib/format";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Card } from "@/components/ui/Card";
 import { DataTable, type Row } from "@/components/ui/DataTable";
-import { Badge, OriginTag, StatusBadge } from "@/components/ui/Badge";
+import { Badge, StatusBadge } from "@/components/ui/Badge";
 import { Notice } from "@/components/ui/Notice";
 
 export const metadata: Metadata = { title: "Intégrations" };
 
 export default async function IntegrationsPage() {
   await requireAdmin("admin.access");
-  const widgets = listWidgets();
-  const rows: Row[] = listOrganizations().map((org) => {
+  const [widgets, orgs, receptionists, allDomains] = await Promise.all([listWidgets(), listOrganizations(), listReceptionists(), listDomains()]);
+  const rcpById = new Map(receptionists.map((r) => [r.id, r]));
+  const domainsByOrg = new Map<string, typeof allDomains>();
+  for (const d of allDomains) domainsByOrg.set(d.organizationId, [...(domainsByOrg.get(d.organizationId) ?? []), d]);
+  const rows: Row[] = orgs.map((org) => {
     const w = widgets.find((x) => x.organizationId === org.id) ?? null;
-    const domains = listDomainsForOrg(org.id);
-    const rcp = w?.receptionistId ? getReceptionist(w.receptionistId) : null;
+    const domains = domainsByOrg.get(org.id) ?? [];
+    const rcp = w?.receptionistId ? rcpById.get(w.receptionistId) ?? null : null;
     const status = w?.status ?? "not_configured";
     return {
       id: org.id,
@@ -52,11 +55,10 @@ export default async function IntegrationsPage() {
       <PageHeader
         title="Intégrations et déploiement"
         description="Préparation de l’installation du widget ATIE Presence sur les sites des clients."
-        meta={<OriginTag origin="demo" />}
       />
-      <Notice kind="demo" title="Aucune publication en production" className="mb-6">
+      <Notice kind="info" title="Aucune publication depuis la console" className="mb-6">
         Cet écran prépare les scripts et vérifie la configuration. Aucun widget n’est publié et aucun site client n’est modifié depuis la console.
-        Le « dernier signal » est une donnée de démonstration.
+        Le « dernier signal » sera renseigné par le backend lorsqu’il sera connecté.
       </Notice>
       <Card>
         <DataTable

@@ -24,7 +24,6 @@ export const PERMISSIONS = [
   "settings.write",
   "users.manage",
   "audit.read",
-  "demo.reset",
   // Espace client (toujours limité à sa propre entreprise)
   "client.access",
   "client.requests.update",
@@ -56,7 +55,7 @@ const ATIE_ADMIN: Permission[] = [
   "audit.read",
 ];
 
-const SUPER_ADMIN: Permission[] = [...ATIE_ADMIN, "plan.write", "settings.write", "users.manage", "demo.reset"];
+const SUPER_ADMIN: Permission[] = [...ATIE_ADMIN, "plan.write", "settings.write", "users.manage"];
 
 const ORG_VIEWER: Permission[] = ["client.access"];
 const ORG_ADMIN: Permission[] = [
@@ -101,7 +100,6 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
   "settings.write": "Modifier les paramètres plateforme",
   "users.manage": "Gérer les utilisateurs internes",
   "audit.read": "Consulter le journal d’audit",
-  "demo.reset": "Réinitialiser la démonstration",
   "client.access": "Accéder à l’espace client",
   "client.requests.update": "Traiter les demandes visiteurs",
   "client.org.write": "Modifier les informations de l’entreprise",

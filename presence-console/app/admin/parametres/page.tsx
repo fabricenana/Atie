@@ -1,10 +1,9 @@
 import Link from "next/link";
 import type { Metadata } from "next";
-import { AlertTriangle, Bell, Check, Minus, RotateCcw } from "lucide-react";
+import { AlertTriangle, Bell, Check, Minus } from "lucide-react";
 import { requireAdmin } from "@/lib/auth/session";
 import { can, PERMISSION_LABELS, PERMISSIONS, ROLE_LABELS, ROLE_PERMISSIONS } from "@/lib/auth/permissions";
 import {
-  getDemoMeta,
   getSettings,
   getUser,
   listAtieUsers,
@@ -13,12 +12,11 @@ import {
   listNotifications,
   listOrganizations,
   listProviderStatuses,
-  quotaForOrg,
+  listQuotas,
 } from "@/lib/repositories";
 import {
   inviteUser,
   markNotificationsRead,
-  resetDemoData,
   saveAlertSettings,
   saveLanguages,
   savePlatformSettings,
@@ -81,11 +79,25 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   const v = await requireAdmin("settings.read");
   const sp = await searchParams;
   const section: Section = SECTIONS.some((s) => s.key === sp.section) ? (sp.section as Section) : "profil";
-  const settings = getSettings();
   const canSettings = can(v.role, "settings.write");
   const canUsers = can(v.role, "users.manage");
   const current = SECTIONS.find((s) => s.key === section)!;
-  const unread = listNotifications(null).filter((n) => !n.readAt).length;
+  const canAudit = can(v.role, "audit.read");
+
+  // Lectures communes, puis lectures propres à la rubrique affichée seulement.
+  const [settings, notifications, orgList] = await Promise.all([getSettings(), listNotifications(null), listOrganizations()]);
+  const unread = notifications.filter((n) => !n.readAt).length;
+  const orgs = new Map(orgList.map((o) => [o.id, o.name]));
+  const atieUsers = section === "utilisateurs" ? await listAtieUsers() : [];
+  const providerStatuses = section === "fournisseurs" || section === "services" ? await listProviderStatuses() : [];
+  const incidents = section === "services" ? await listIncidents() : [];
+  const overQuota =
+    section === "alertes"
+      ? await listQuotas().then((m) => orgList.flatMap((o) => (m.get(o.id) ? [{ o, q: m.get(o.id)! }] : [])).filter((x) => x.q.alert !== "none"))
+      : [];
+  const events = section === "audit" && canAudit ? await listAuditEvents() : [];
+  const actorIds = [...new Set(events.map((e) => e.actorId).filter((x): x is string => Boolean(x)))];
+  const actors = new Map((await Promise.all(actorIds.map((id) => getUser(id)))).filter((u) => u !== null).map((u) => [u.id, u.fullName]));
 
   return (
     <>
@@ -122,7 +134,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         <div className="min-w-0">
           {section === "profil" ? (
             <Card className="max-w-3xl">
-              <CardHeader title="Profil administrateur" description="Votre compte interne ATIE (fictif)." />
+              <CardHeader title="Profil administrateur" description="Votre compte interne ATIE." />
               <CardBody className="flex flex-col gap-6">
                 <DefinitionList
                   items={[
@@ -136,7 +148,9 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                   <TextField label="Nom affiché" name="fullName" required defaultValue={v.user.fullName} className="flex-1" maxLength={80} />
                   <SubmitButton>Enregistrer</SubmitButton>
                 </ActionForm>
-                <Notice kind="demo">Profil de démonstration : le mot de passe et la double authentification seront gérés par le fournisseur d’identité en production.</Notice>
+                <Notice kind="info">
+                  Le mot de passe est géré par Supabase Auth : pour le changer, utilisez « Mot de passe oublié » depuis la page de connexion.
+                </Notice>
               </CardBody>
             </Card>
           ) : null}
@@ -158,7 +172,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                     { key: "login", label: "Dernière connexion", sortable: true, hideBelow: "lg" },
                     { key: "actions", label: "Actions", align: "right" },
                   ]}
-                  rows={listAtieUsers().map((u): Row => ({
+                  rows={atieUsers.map((u): Row => ({
                     id: u.id,
                     search: `${u.fullName} ${u.email}`,
                     filters: { role: u.atieRole ?? "" },
@@ -192,7 +206,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
               </Card>
               {canUsers ? (
                 <Card>
-                  <CardHeader title="Inviter un collaborateur" description="L’invitation est préparée localement ; aucun e-mail n’est envoyé en démonstration." />
+                  <CardHeader title="Inviter un collaborateur" description="Un e-mail d’invitation est envoyé : la personne y définit son mot de passe, puis peut se connecter." />
                   <CardBody>
                     <ActionForm action={inviteUser} resetOnSuccess className="grid gap-5 md:grid-cols-[repeat(3,minmax(0,1fr))_auto] md:items-end">
                       <TextField label="Nom complet" name="fullName" required maxLength={80} />
@@ -342,8 +356,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
               />
               <CardBody className="pt-3">
                 {(() => {
-                  const list = listNotifications(null);
-                  const orgs = new Map(listOrganizations().map((o) => [o.id, o.name]));
+                  const list = notifications;
                   if (list.length === 0) return <EmptyState title="Aucune notification" icon={<Bell />} />;
                   return (
                     <ul className="flex flex-col divide-y divide-line">
@@ -381,7 +394,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                     <fieldset disabled={!canSettings} className="grid gap-5 sm:grid-cols-2">
                       <legend className="sr-only">Alertes</legend>
                       <TextField label="Seuil d’alerte (%)" name="quotaAlertPct" type="number" min={50} max={100} required defaultValue={settings.quotaAlertPct} />
-                      <TextField label="Destinataire interne" name="notifyEmail" type="email" required defaultValue={settings.notifyEmail} hint="Aucun e-mail n’est envoyé en démonstration." />
+                      <TextField label="Destinataire interne" name="notifyEmail" type="email" required defaultValue={settings.notifyEmail} hint="L’envoi automatique des e-mails d’alerte n’est pas encore connecté." />
                     </fieldset>
                     {canSettings ? (
                       <div className="mt-6 flex justify-end border-t border-line pt-5">
@@ -395,9 +408,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                 <CardHeader title="Entreprises au-dessus de leur seuil" />
                 <CardBody className="pt-3">
                   {(() => {
-                    const over = listOrganizations()
-                      .map((o) => ({ o, q: quotaForOrg(o.id) }))
-                      .filter((x) => x.q.alert !== "none");
+                    const over = overQuota;
                     if (!over.length) return <EmptyState title="Aucune entreprise en alerte" />;
                     return (
                       <ul className="flex flex-col divide-y divide-line">
@@ -418,12 +429,10 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
           ) : null}
 
           {section === "audit" ? (
-            can(v.role, "audit.read") ? (
+            canAudit ? (
               <Card>
                 <CardHeader title="Journal d’audit" description="Actions administratives enregistrées. Journalisation limitée : aucun contenu de conversation, aucun secret." />
                 {(() => {
-                  const orgs = new Map(listOrganizations().map((o) => [o.id, o.name]));
-                  const events = listAuditEvents();
                   const actions = [...new Set(events.map((e) => e.action.split(".")[0]))];
                   return (
                     <DataTable
@@ -443,7 +452,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                         { key: "actor", label: "Auteur", sortable: true, hideBelow: "md" },
                       ]}
                       rows={events.map((e): Row => {
-                        const actor = getUser(e.actorId)?.fullName ?? e.actorId;
+                        const actor = (e.actorId && actors.get(e.actorId)) || "Système";
                         return {
                           id: e.id,
                           search: `${e.action} ${e.target} ${e.detail} ${actor}`,
@@ -480,7 +489,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                 Les clés LiveKit, LemonSlice et des autres fournisseurs restent dans l’environnement du backend Python. Seul leur statut de configuration est affiché ; une clé n’est jamais lue, affichée ni journalisée ici.
               </Notice>
               <div className="grid gap-4 md:grid-cols-2">
-                {listProviderStatuses().map((p) => (
+                {providerStatuses.map((p) => (
                   <Card key={p.id}>
                     <CardHeader title={p.label} actions={<StatusBadge status={CONNECTION_STATUS[p.connection]} />} />
                     <CardBody>
@@ -500,12 +509,12 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
 
           {section === "services" ? (
             <div className="flex flex-col gap-6">
-              <NotConnected what="Supervision en temps réel">Les états ci-dessous sont ceux de la démonstration. La supervision réelle sera fournie par le backend (GET /health) une fois la console connectée.</NotConnected>
+              <NotConnected what="Supervision en temps réel">La console n’interroge pas encore le backend (GET /health) : les états ci-dessous indiquent seulement la configuration connue.</NotConnected>
               <Card>
                 <CardHeader title="État des services" />
                 <CardBody className="pt-3">
                   <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                    {listProviderStatuses().map((p) => (
+                    {providerStatuses.map((p) => (
                       <li key={p.id} className="flex items-center justify-between gap-3 rounded-xl border border-line px-4 py-3">
                         <span className="min-w-0 truncate text-[13.5px] font-medium">{p.label}</span>
                         <StatusBadge status={CONNECTION_STATUS[p.connection]} />
@@ -515,10 +524,10 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                 </CardBody>
               </Card>
               <Card>
-                <CardHeader title="Incidents" description="Historique des incidents techniques (démo)" />
+                <CardHeader title="Incidents" description="Historique des incidents techniques remontés par la supervision (non connectée)" />
                 <CardBody className="pt-3">
                   {(() => {
-                    const list = listIncidents();
+                    const list = incidents;
                     if (!list.length) return <EmptyState title="Aucun incident" />;
                     return (
                       <ul className="flex flex-col divide-y divide-line">
@@ -558,7 +567,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                         name="require2fa"
                         defaultChecked={settings.require2fa}
                         label="Double authentification obligatoire"
-                        description="Exigée pour tous les comptes ATIE et clients en production. Non appliquée en démonstration (pas d’authentification réelle)."
+                        description="Réglage enregistré, pas encore appliqué : la connexion actuelle (Supabase Auth, e-mail et mot de passe) ne demande pas de second facteur."
                       />
                       <TextField
                         label="Durée d’une session (minutes)"
@@ -587,32 +596,10 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                     <li>Principes de la loi fédérale sur la protection des données (LPD) : finalité, proportionnalité, transparence, sécurité.</li>
                     <li>Séparation stricte des entreprises : chaque Knowledge Base et chaque demande reste dans son tenant.</li>
                     <li>Conservation des demandes visiteurs configurable ({settings.defaultRetentionDays} jours par défaut), puis suppression.</li>
-                    <li>Transcriptions désactivées par défaut ; jamais générées en démonstration.</li>
+                    <li>Transcriptions désactivées par défaut ; la console n’en génère aucune.</li>
                     <li>Journalisation limitée : actions administratives seulement, sans contenu de conversation ni secret.</li>
                   </ul>
                   <Notice kind="warning">Cette interface ne constitue pas une garantie de conformité juridique. La conformité doit être évaluée avec un conseil spécialisé.</Notice>
-                </CardBody>
-              </Card>
-              <Card>
-                <CardHeader title="Données de démonstration" description={`Générées le ${formatDateTime(getDemoMeta().generatedAt)} · version ${getDemoMeta().version}`} />
-                <CardBody>
-                  {can(v.role, "demo.reset") ? (
-                    <ConfirmAction
-                      action={resetDemoData}
-                      payload={{}}
-                      label="Réinitialiser les données de démonstration"
-                      icon={<RotateCcw aria-hidden />}
-                      size="md"
-                      confirmLabel="Réinitialiser"
-                      title="Réinitialiser toutes les données de démonstration ?"
-                    >
-                      <p className="text-[14px] text-muted">
-                        Toutes les modifications locales (formules, abonnements, demandes, journal…) seront remplacées par le jeu de données fictif d’origine. Aucun système externe n’est concerné.
-                      </p>
-                    </ConfirmAction>
-                  ) : (
-                    <Notice kind="info">Réservé au super administrateur ATIE.</Notice>
-                  )}
                 </CardBody>
               </Card>
             </div>

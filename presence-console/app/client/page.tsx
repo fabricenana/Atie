@@ -15,7 +15,7 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { Card, CardBody, CardHeader } from "@/components/ui/Card";
 import { Stat, StatGrid } from "@/components/ui/Stat";
 import { RingGauge } from "@/components/ui/Charts";
-import { StatusBadge, OriginTag } from "@/components/ui/Badge";
+import { StatusBadge } from "@/components/ui/Badge";
 import { Notice } from "@/components/ui/Notice";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ButtonLink } from "@/components/ui/Button";
@@ -27,13 +27,14 @@ export default async function ClientDashboard({ searchParams }: { searchParams: 
   const v = await requireClient();
   const sp = await searchParams;
   const org = v.organization;
-  const q = quotaForOrg(org.id);
-  const rcp = getReceptionistForOrg(org.id);
-  const avatar = rcp ? getAvatar(rcp.avatarId) : null;
+  const [q, rcp, allRequests] = await Promise.all([quotaForOrg(org.id), getReceptionistForOrg(org.id), listVisitorRequestsForOrg(org.id)]);
+  const [avatar, langs] = await Promise.all([
+    rcp ? getAvatar(rcp.avatarId) : Promise.resolve(null),
+    visitorLanguagesForOrg(org.id, q.subscription?.currentPeriodStart),
+  ]);
   const total = q.includedMinutes + q.topupMinutes;
-  const langs = visitorLanguagesForOrg(org.id, q.subscription?.currentPeriodStart);
-  const requests = listVisitorRequestsForOrg(org.id).slice(0, 5);
-  const newCount = listVisitorRequestsForOrg(org.id).filter((r) => r.status === "new").length;
+  const requests = allRequests.slice(0, 5);
+  const newCount = allRequests.filter((r) => r.status === "new").length;
   const serviceStatus =
     org.status === "suspended"
       ? { label: "Service suspendu", tone: "danger" as const }
@@ -48,12 +49,7 @@ export default async function ClientDashboard({ searchParams }: { searchParams: 
       <PageHeader
         title={org.name}
         description="Votre réceptionniste numérique, sa consommation et les demandes de vos visiteurs."
-        meta={
-          <>
-            <StatusBadge status={ORG_STATUS[org.status]} />
-            <OriginTag origin="demo" />
-          </>
-        }
+        meta={<StatusBadge status={ORG_STATUS[org.status]} />}
       />
 
       {sp.denied ? (
@@ -107,7 +103,7 @@ export default async function ClientDashboard({ searchParams }: { searchParams: 
           <CardHeader
             title="Minutes du mois"
             description={q.subscription ? `Du ${formatDate(q.subscription.currentPeriodStart)} au ${formatDate(q.subscription.currentPeriodEnd)}` : "Aucun abonnement actif"}
-            actions={<OriginTag origin="demo" />}
+           
           />
           <CardBody className="flex flex-col items-center gap-5 sm:flex-row sm:items-center sm:justify-around">
             <RingGauge value={q.usedMinutes} max={total || 1} label="Part des minutes utilisées" sublabel="utilisées" />
@@ -171,7 +167,7 @@ export default async function ClientDashboard({ searchParams }: { searchParams: 
         </Card>
 
         <Card>
-          <CardHeader title="Langues des visiteurs" description="Conversations de la période en cours" actions={<OriginTag origin="demo" />} />
+          <CardHeader title="Langues des visiteurs" description="Conversations de la période en cours" />
           <CardBody className="pt-3">
             {langs.total === 0 ? (
               <EmptyState icon={<Globe2 />} title="Pas encore de conversation" description="La répartition apparaîtra dès les premières conversations du mois." />

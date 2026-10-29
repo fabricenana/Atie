@@ -18,9 +18,9 @@ export const metadata: Metadata = { title: "Nouvelle réceptionniste" };
 
 export default async function NewReceptionistPage() {
   await requireAdmin("receptionist.write");
-  const avatars = listAvatars();
-  const taken = new Set(listReceptionists().map((r) => r.organizationId).filter(Boolean));
-  const free = listOrganizations().filter((o) => !taken.has(o.id));
+  const [avatars, receptionists, organizations] = await Promise.all([listAvatars(), listReceptionists(), listOrganizations()]);
+  const taken = new Set(receptionists.map((r) => r.organizationId).filter(Boolean));
+  const free = organizations.filter((o) => !taken.has(o.id));
 
   return (
     <>
@@ -71,7 +71,12 @@ export default async function NewReceptionistPage() {
             </FormGrid>
           </CardBody>
         </Card>
-        <Notice kind="demo">Enregistrement dans les données locales de démonstration. Aucun appel à LemonSlice ni à LiveKit.</Notice>
+        {avatars.length === 0 ? (
+          <Notice kind="warning" title="Aucun avatar disponible">
+            Le catalogue d’avatars est vide : appliquez la migration 002 (avatars Léa et Maya) avant de créer une réceptionniste.
+          </Notice>
+        ) : null}
+        <Notice kind="not_connected">Enregistrement dans la base de la console. Aucun appel à LemonSlice ni à LiveKit.</Notice>
         <div className="flex flex-wrap justify-end gap-2">
           <ButtonLink href="/admin/receptionnistes">Annuler</ButtonLink>
           <SubmitButton>Créer en brouillon</SubmitButton>

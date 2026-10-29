@@ -31,7 +31,7 @@ export default async function ClientSupport({ searchParams }: { searchParams: Pr
   const sp = await searchParams;
   const entry = ENTRIES.find((e) => e.kind === sp.type) ?? ENTRIES[0];
   const canCreate = can(v.role, "client.support.create");
-  const history = listSupportForOrg(v.organization.id);
+  const history = await listSupportForOrg(v.organization.id);
 
   return (
     <>

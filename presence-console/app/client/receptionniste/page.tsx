@@ -26,10 +26,8 @@ const AFTER_HOURS: Record<string, string> = {
 export default async function MyReceptionist() {
   const v = await requireClient();
   const org = v.organization;
-  const rcp = getReceptionistForOrg(org.id);
-  const avatar = rcp ? getAvatar(rcp.avatarId) : null;
-  const domains = listDomainsForOrg(org.id);
-  const widget = getWidgetForOrg(org.id);
+  const [rcp, domains, widget] = await Promise.all([getReceptionistForOrg(org.id), listDomainsForOrg(org.id), getWidgetForOrg(org.id)]);
+  const avatar = rcp ? await getAvatar(rcp.avatarId) : null;
   const canRequest = can(v.role, "client.support.create");
 
   const changeButton = (
@@ -161,13 +159,13 @@ export default async function MyReceptionist() {
         <CardBody className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,280px)] lg:items-center">
           <WidgetPreview name={rcp.name} role={rcp.role} portraitUrl={avatar?.portraitUrl ?? null} greeting={rcp.greeting} langs={langs.map((l) => LANG_SHORT[l])} />
           <div className="flex flex-col gap-4">
-            <Notice kind="demo" title="Aperçu statique">
+            <Notice kind="info" title="Aperçu statique">
               Cet aperçu ne démarre aucune conversation : pas de micro, pas de connexion, aucune minute décomptée.
             </Notice>
             <Button disabled title="Indisponible dans l’aperçu">
               Démarrer une conversation d’essai
             </Button>
-            <p className="text-[12.5px] text-muted">Pour essayer votre réceptionniste en conditions réelles, rendez-vous sur votre site ou demandez une démonstration à ATIE.</p>
+            <p className="text-[12.5px] text-muted">Pour essayer votre réceptionniste en conditions réelles, rendez-vous sur votre site ou demandez un essai accompagné à ATIE.</p>
           </div>
         </CardBody>
       </Card>

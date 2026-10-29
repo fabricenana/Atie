@@ -17,21 +17,26 @@ import { ConfirmAction } from "@/components/ui/ConfirmAction";
 
 export const metadata: Metadata = { title: "Facture" };
 
-const METHOD: Record<string, string> = { bank_transfer: "Virement", card: "Carte", manual: "Saisie manuelle (démo)" };
+const METHOD: Record<string, string> = { bank_transfer: "Virement", card: "Carte", manual: "Règlement constaté manuellement" };
 
 export default async function InvoicePage({ params }: { params: Promise<{ id: string }> }) {
   const v = await requireAdmin("billing.read");
   const { id } = await params;
-  const inv = getInvoice(id);
+  const inv = await getInvoice(id);
   if (!inv) notFound();
-  const org = getOrganization(inv.organizationId);
-  const payments = listPaymentsForInvoice(inv.id);
-  const settings = getBillingSettings();
+  const [org, payments, settings, allInvoices] = await Promise.all([
+    getOrganization(inv.organizationId),
+    listPaymentsForInvoice(inv.id),
+    getBillingSettings(),
+    listInvoices(),
+  ]);
   const canWrite = can(v.role, "billing.write");
   const isCredit = inv.kind === "credit_note";
   const payable = !isCredit && (inv.status === "open" || inv.status === "overdue");
   const creditable = !isCredit && inv.status !== "void" && inv.status !== "credited" && inv.status !== "draft";
-  const existingCredit = listInvoices().find((i) => i.kind === "credit_note" && i.lines.some((l) => l.label.includes(inv.number)));
+  const existingCredit = allInvoices.find(
+    (i) => i.kind === "credit_note" && (i.creditedInvoiceId === inv.id || (!i.creditedInvoiceId && i.lines.some((l) => l.label.includes(inv.number)))),
+  );
   const vat = Math.round((inv.totalCents * settings.vatRatePermille) / (1000 + settings.vatRatePermille));
 
   return (
@@ -40,12 +45,7 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
         title={inv.number}
         description={`${isCredit ? "Avoir" : "Facture"} · ${org?.name ?? inv.organizationId}`}
         breadcrumbs={[{ label: "Facturation", href: `/admin/facturation?tab=${isCredit ? "avoirs" : "factures"}` }, { label: inv.number }]}
-        meta={
-          <>
-            <StatusBadge status={INVOICE_STATUS[inv.status]} />
-            <Badge>Démonstration</Badge>
-          </>
-        }
+        meta={<StatusBadge status={INVOICE_STATUS[inv.status]} />}
         actions={
           canWrite ? (
             <>
@@ -53,27 +53,27 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
                 <ConfirmAction
                   action={markInvoicePaid}
                   payload={{ id: inv.id }}
-                  label="Marquer payée (démo)"
+                  label="Marquer payée"
                   variant="primary"
                   confirmVariant="primary"
                   size="md"
                   confirmLabel="Marquer payée"
                   title={`Marquer ${inv.number} comme payée ?`}
                 >
-                  <p className="text-[14px] text-muted">Enregistre un règlement manuel fictif de {formatCHF(inv.totalCents)}. Aucun paiement réel n’est encaissé.</p>
+                  <p className="text-[14px] text-muted">Enregistre un règlement de {formatCHF(inv.totalCents)} constaté manuellement. Rien n’est encaissé par la console.</p>
                 </ConfirmAction>
               ) : null}
               {creditable && !existingCredit ? (
                 <ConfirmAction
                   action={issueCreditNote}
                   payload={{ id: inv.id }}
-                  label="Émettre un avoir (démo)"
+                  label="Émettre un avoir"
                   size="md"
                   confirmLabel="Émettre l’avoir"
                   title={`Émettre un avoir sur ${inv.number} ?`}
                 >
                   <p className="text-[14px] text-muted">
-                    Un avoir de {formatCHF(-inv.totalCents)} sera créé (numéro DEMO-AV-…). {payable ? "La facture non réglée sera annulée." : "La facture payée reste payée."} Document sans valeur comptable.
+                    Un avoir de {formatCHF(-inv.totalCents)} sera créé (numéro {settings.invoicePrefix}AV-…). {payable ? "La facture non réglée sera annulée." : "La facture payée reste payée."} Aucun remboursement n’est déclenché automatiquement.
                   </p>
                 </ConfirmAction>
               ) : null}
@@ -82,8 +82,8 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
         }
       />
 
-      <Notice kind="demo" title="Document de démonstration — sans valeur comptable" className="mb-6">
-        Cette pièce est générée à partir de données fictives. Elle ne constitue ni une facture officielle ni une preuve de paiement.
+      <Notice kind="not_connected" title="Paiements non connectés" className="mb-6">
+        Aucun prestataire de paiement n’est relié à la console : les règlements affichés sont ceux saisis manuellement par ATIE.
       </Notice>
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
@@ -123,7 +123,7 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
                 </tfoot>
               </table>
             </div>
-            <p className="mt-6 border-t border-line pt-4 font-ui text-[12px] text-faint">{settings.footerNote}</p>
+            {settings.footerNote ? <p className="mt-6 border-t border-line pt-4 font-ui text-[12px] text-faint">{settings.footerNote}</p> : null}
           </CardBody>
         </Card>
 

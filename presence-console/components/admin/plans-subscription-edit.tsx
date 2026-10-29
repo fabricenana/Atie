@@ -34,7 +34,7 @@ export function SubscriptionEditButton({
       <Modal open={open} onClose={() => setOpen(false)} title="Modifier l’abonnement" description={orgName}>
         <ActionForm action={updateSubscription} onSuccess={() => setOpen(false)} className="flex flex-col gap-5">
           <input type="hidden" name="subscriptionId" value={subscriptionId} />
-          <SelectField label="Formule" name="planId" defaultValue={planId} options={plans} required hint="Le changement est appliqué localement, sans facturation." />
+          <SelectField label="Formule" name="planId" defaultValue={planId} options={plans} required hint="Le changement est enregistré dans la console, sans facturation automatique." />
           <TextField label="Seuil d’alerte (%)" name="alertThresholdPct" type="number" min={50} max={100} defaultValue={alertThresholdPct} required />
           <Checkbox name="autoRenew" label="Renouvellement automatique" description="Reconduction mensuelle à l’échéance." defaultChecked={autoRenew} />
           <div className="flex justify-end gap-2 border-t border-line pt-4">

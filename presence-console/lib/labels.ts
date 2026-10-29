@@ -51,7 +51,6 @@ export const END_REASON: Record<Exclude<EndReason, null>, string> = {
 };
 
 export const INDEX_STATUS: Record<IndexStatus, Labelled> = {
-  demo_not_indexed: L("Démo — non indexé", "neutral"),
   pending: L("En attente d’indexation", "info"),
   indexing: L("Indexation en cours", "info"),
   indexed: L("Indexé", "success"),

@@ -10,7 +10,7 @@ import { formatCHF, formatDate, formatNumber } from "@/lib/format";
 import { requestPlanChange, requestTopup } from "@/lib/actions/client";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Card, CardBody, CardHeader, DefinitionList } from "@/components/ui/Card";
-import { Badge, OriginTag, StatusBadge } from "@/components/ui/Badge";
+import { Badge, StatusBadge } from "@/components/ui/Badge";
 import { Notice } from "@/components/ui/Notice";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ActionForm, SubmitButton } from "@/components/ui/ActionForm";
@@ -22,18 +22,22 @@ export const metadata: Metadata = { title: "Mon abonnement" };
 export default async function ClientSubscription() {
   const v = await requireClient();
   const org = v.organization;
-  const q = quotaForOrg(org.id);
+  const [q, topupList, concurrency, invoices, active] = await Promise.all([
+    quotaForOrg(org.id),
+    listTopupsForOrg(org.id),
+    listConcurrencyForOrg(org.id),
+    listInvoicesForOrg(org.id),
+    activePlans(),
+  ]);
   const canRequest = can(v.role, "client.topup.request");
-  const topups = listTopupsForOrg(org.id).sort((a, b) => b.requestedAt.localeCompare(a.requestedAt));
-  const concurrency = listConcurrencyForOrg(org.id);
-  const invoices = listInvoicesForOrg(org.id);
-  const plans = activePlans().filter((p) => p.approval !== "draft" || p.id === q.plan?.id);
+  const topups = topupList.sort((a, b) => b.requestedAt.localeCompare(a.requestedAt));
+  const plans = active.filter((p) => p.approval !== "draft" || p.id === q.plan?.id);
 
   return (
     <>
-      <PageHeader title="Mon abonnement" description="Votre formule, vos options et vos factures. ATIE s’occupe de la configuration, sans frais d’installation." meta={<OriginTag origin="demo" />} />
+      <PageHeader title="Mon abonnement" description="Votre formule, vos options et vos factures. ATIE s’occupe de la configuration, sans frais d’installation." />
 
-      <Notice kind="demo" title="Mode demande" className="mb-6">
+      <Notice kind="info" title="Mode demande" className="mb-6">
         Les recharges et changements de formule sont envoyés à ATIE sous forme de demande. Aucun paiement n’est effectué depuis cet espace.
       </Notice>
 
@@ -111,7 +115,7 @@ export default async function ClientSubscription() {
 
       <div className="mt-6 grid gap-6 lg:grid-cols-2">
         <Card id="recharges" className="scroll-mt-24">
-          <CardHeader title="Recharges de minutes" description="Des minutes supplémentaires, valables sur la période en cours" actions={<OriginTag origin="demo" />} />
+          <CardHeader title="Recharges de minutes" description="Des minutes supplémentaires, valables sur la période en cours" />
           <CardBody>
             {canRequest ? (
               <ActionForm action={requestTopup} className="flex flex-col gap-4">
@@ -123,7 +127,7 @@ export default async function ClientSubscription() {
                         <input type="radio" name="minutes" value={o.minutes} defaultChecked={i === 0} className="size-4 accent-[#e31e24]" />
                         <span>
                           <span className="flex items-center gap-1.5 font-head text-[17px] font-semibold"><Zap aria-hidden className="size-4 text-red" /> {o.minutes} minutes</span>
-                          <span className="font-ui text-[12.5px] text-muted">{formatCHF(o.priceCents)} · prix indicatif</span>
+                          <span className="font-ui text-[12.5px] text-muted">{formatCHF(o.priceCents)} · hors abonnement</span>
                         </span>
                       </label>
                     ))}
@@ -187,7 +191,7 @@ export default async function ClientSubscription() {
       </div>
 
       <Card className="mt-6">
-        <CardHeader title="Historique des factures" description="Documents de démonstration, sans valeur comptable" actions={<OriginTag origin="demo" />} />
+        <CardHeader title="Historique des factures" description="Factures émises par ATIE pour votre entreprise" />
         <DataTable
           caption="Historique des factures"
           searchPlaceholder="Rechercher un numéro…"

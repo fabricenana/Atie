@@ -33,7 +33,7 @@ const EVENT_LABEL: Record<ConversationEvent["type"], { label: string; Icon: type
 export default async function SessionDetail({ params }: Params) {
   await requireAdmin("session.read_all");
   const { id } = await params;
-  const found = getConversation(id);
+  const found = await getConversation(id);
   if (!found) notFound();
   const { conversation: c, organization: org, receptionist: rcp, events } = found;
   const showTranscript = Boolean(org?.transcriptsEnabled) && c.transcriptAvailable;
@@ -47,7 +47,6 @@ export default async function SessionDetail({ params }: Params) {
         meta={
           <>
             <StatusBadge status={SESSION_STATUS[c.status]} />
-            <OriginTag origin="demo" />
           </>
         }
         actions={org ? <ButtonLink href={`/admin/entreprises/${org.id}?tab=sessions`}>Sessions de l’entreprise</ButtonLink> : null}
@@ -77,13 +76,17 @@ export default async function SessionDetail({ params }: Params) {
                 ["Fin", c.endedAt ? formatDateTime(c.endedAt) : "En cours"],
                 ["Durée", formatDuration(c.durationSeconds)],
                 ["Langue", LANG_LABELS[c.lang]],
-                ["Motif de fin", c.endReason ? END_REASON[c.endReason] : "—"],
+                ["Motif de fin", c.endReason ? (END_REASON[c.endReason] ?? c.endReason) : "—"],
                 ["Minutes facturables", formatNumber(toMinutes(c.billableSeconds))],
                 [
                   "Coût fournisseur",
-                  <span key="c" className="inline-flex items-center gap-2">
-                    {formatCHF(c.providerCostCents)} <OriginTag origin={c.providerCostOrigin} />
-                  </span>,
+                  c.providerCostCents === null ? (
+                    "— (non transmis par le backend)"
+                  ) : (
+                    <span key="c" className="inline-flex items-center gap-2">
+                      {formatCHF(c.providerCostCents)} <OriginTag origin={c.providerCostOrigin} />
+                    </span>
+                  ),
                 ],
                 ["Identifiant backend", <code key="b" className="break-all font-mono text-[12.5px]">{c.backendSessionId}</code>],
               ]}
@@ -99,7 +102,7 @@ export default async function SessionDetail({ params }: Params) {
             ) : (
               <ol className="relative flex flex-col gap-5 before:absolute before:bottom-2 before:left-[13px] before:top-2 before:w-px before:bg-line">
                 {events.map((e) => {
-                  const meta = EVENT_LABEL[e.type];
+                  const meta = EVENT_LABEL[e.type] ?? { label: e.type, Icon: Circle, cls: "text-muted" };
                   return (
                     <li key={e.id} className="relative flex gap-3">
                       <span aria-hidden className={`relative grid size-7 shrink-0 place-items-center rounded-full border border-line bg-surface ${meta.cls}`}>

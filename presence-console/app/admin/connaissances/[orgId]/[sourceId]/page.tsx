@@ -9,7 +9,7 @@ import { INDEX_STATUS, KNOWLEDGE_KIND } from "@/lib/labels";
 import { formatDateTime, formatNumber } from "@/lib/format";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Card, CardBody, CardHeader, DefinitionList } from "@/components/ui/Card";
-import { Badge, OriginTag, StatusBadge } from "@/components/ui/Badge";
+import { Badge, StatusBadge } from "@/components/ui/Badge";
 import { NotConnected } from "@/components/ui/Notice";
 import { ActionForm, SubmitButton } from "@/components/ui/ActionForm";
 import { TextAreaField, TextField } from "@/components/ui/FormFields";
@@ -19,7 +19,7 @@ type Params = { params: Promise<{ orgId: string; sourceId: string }> };
 
 export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const { orgId, sourceId } = await params;
-  return { title: getKnowledgeSourceForOrg(orgId, sourceId)?.source.title ?? "Document" };
+  return { title: (await getKnowledgeSourceForOrg(orgId, sourceId))?.source.title ?? "Document" };
 }
 
 function bytes(n: number) {
@@ -31,11 +31,15 @@ function bytes(n: number) {
 export default async function KnowledgeSourcePage({ params }: Params) {
   const v = await requireAdmin("knowledge.read_all");
   const { orgId, sourceId } = await params;
-  const org = getOrganization(orgId);
+  const org = await getOrganization(orgId);
   // Isolation : la source n'est trouvée que si elle appartient à cette entreprise.
-  const found = org ? getKnowledgeSourceForOrg(org.id, sourceId) : null;
+  const found = org ? await getKnowledgeSourceForOrg(org.id, sourceId) : null;
   if (!org || !found) notFound();
   const { source, versions } = found;
+  // Auteurs des versions, préchargés.
+  const authorIds = [...new Set([source.updatedBy, ...versions.map((d) => d.createdBy)].filter((x): x is string => Boolean(x)))];
+  const authors = new Map((await Promise.all(authorIds.map((id) => getUser(id)))).filter((u) => u !== null).map((u) => [u.id, u.fullName]));
+  const authorName = (id: string | null) => (id && authors.get(id)) || "—";
   const current = versions[0];
   const canWrite = can(v.role, "knowledge.write");
 
@@ -52,7 +56,6 @@ export default async function KnowledgeSourcePage({ params }: Params) {
           <>
             <Badge>{KNOWLEDGE_KIND[source.kind]}</Badge>
             <StatusBadge status={INDEX_STATUS[source.indexStatus]} />
-            <OriginTag origin="demo" />
           </>
         }
         actions={canWrite ? <KbDeleteButton orgId={org.id} sourceId={source.id} title={source.title} versions={versions.length} /> : null}
@@ -99,7 +102,7 @@ export default async function KnowledgeSourcePage({ params }: Params) {
                   ["Catégorie", source.category],
                   ["Source des connaissances", <span key="o" className="break-all">{source.origin}</span>],
                   ["Créée le", formatDateTime(source.createdAt)],
-                  ["Dernière mise à jour", `${formatDateTime(source.updatedAt)} · ${getUser(source.updatedBy)?.fullName ?? source.updatedBy}`],
+                  ["Dernière mise à jour", `${formatDateTime(source.updatedAt)} · ${authorName(source.updatedBy)}`],
                 ]}
               />
             </CardBody>
@@ -120,7 +123,7 @@ export default async function KnowledgeSourcePage({ params }: Params) {
                         {d.version === source.currentVersion ? <Badge tone="accent">Actuelle</Badge> : null}
                       </p>
                       <p className="font-ui text-[12px] text-faint">
-                        {formatDateTime(d.createdAt)} · {getUser(d.createdBy)?.fullName ?? d.createdBy} · {bytes(d.sizeBytes)}
+                        {formatDateTime(d.createdAt)} · {authorName(d.createdBy)} · {bytes(d.sizeBytes)}
                       </p>
                       {d.version !== source.currentVersion ? (
                         <details className="mt-1.5">

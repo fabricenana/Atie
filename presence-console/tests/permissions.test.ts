@@ -33,8 +33,11 @@ describe("matrice des permissions", () => {
     expect(can("atie_operator", "org.suspend")).toBe(false);
     expect(can("atie_operator", "billing.write")).toBe(false);
     expect(can("atie_admin", "plan.write")).toBe(false);
-    expect(can("atie_admin", "demo.reset")).toBe(false);
-    expect(can("super_admin", "demo.reset")).toBe(true);
+    // La permission « demo.reset » a disparu avec les données de démonstration ; la gestion
+    // des comptes internes (invitations réelles) reste réservée au super administrateur.
+    expect(can("atie_admin", "users.manage")).toBe(false);
+    expect(can("super_admin", "users.manage")).toBe(true);
+    expect((PERMISSIONS as readonly string[]).includes("demo.reset")).toBe(false);
     expect(can("org_viewer", "client.requests.update")).toBe(false);
     expect(can("org_viewer", "client.topup.request")).toBe(false);
   });

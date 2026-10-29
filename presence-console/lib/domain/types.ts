@@ -3,14 +3,14 @@
  *
  * Miroir TypeScript du schéma PostgreSQL cible (db/schema.sql).
  * Conventions :
- *  - identifiants : chaînes préfixées (org_, usr_, rcp_…), UUID en production ;
+ *  - identifiants : UUID (PostgreSQL, schéma « atie ») ;
  *  - dates : ISO 8601 UTC ;
  *  - montants : centimes de CHF (entiers) pour éviter les erreurs d'arrondi ;
  *  - durées : secondes (entiers). Les minutes facturables sont dérivées.
  *
  * Source de vérité : le backend Python Phase 2 reste l'autorité pour les sessions,
  * les quotas, les durées et la consommation. La console ne fait qu'afficher ces
- * valeurs (ou des valeurs de démonstration clairement marquées).
+ * valeurs ; tant que le backend n'écrit rien, elles restent vides.
  */
 
 export type ID = string;
@@ -20,7 +20,7 @@ export type Lang = "fr" | "de" | "it" | "en";
 export const LANGS: Lang[] = ["fr", "de", "it", "en"];
 
 /** Provenance d'une valeur affichée : jamais d'estimation présentée comme une mesure. */
-export type DataOrigin = "demo" | "measured" | "estimated";
+export type DataOrigin = "measured" | "estimated";
 
 // ---------------------------------------------------------------------------
 // Utilisateurs et rôles
@@ -39,7 +39,6 @@ export interface User {
   status: "active" | "invited" | "disabled";
   lastLoginAt: ISODate | null;
   createdAt: ISODate;
-  demo: true;
 }
 
 export interface OrganizationUser {
@@ -80,7 +79,6 @@ export interface Organization {
   retentionDays: number;
   /** Conservation des transcriptions : désactivée par défaut. */
   transcriptsEnabled: boolean;
-  demo: true;
 }
 
 export interface WebsiteDomain {
@@ -136,8 +134,8 @@ export interface Receptionist {
 // ---------------------------------------------------------------------------
 
 export type KnowledgeKind = "text" | "url" | "pdf" | "docx";
-/** "demo_not_indexed" : aucun moteur d'indexation n'est branché. */
-export type IndexStatus = "demo_not_indexed" | "pending" | "indexing" | "indexed" | "failed";
+/** Tant qu'aucun moteur d'indexation n'est branché, les sources restent « pending ». */
+export type IndexStatus = "pending" | "indexing" | "indexed" | "failed";
 
 export interface KnowledgeSource {
   id: ID;
@@ -151,7 +149,7 @@ export interface KnowledgeSource {
   currentVersion: number;
   createdAt: ISODate;
   updatedAt: ISODate;
-  updatedBy: ID;
+  updatedBy: ID | null;
 }
 
 export interface KnowledgeDocument {
@@ -162,7 +160,7 @@ export interface KnowledgeDocument {
   content: string;
   sizeBytes: number;
   createdAt: ISODate;
-  createdBy: ID;
+  createdBy: ID | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -208,7 +206,7 @@ export type EndReason =
 export interface Conversation {
   id: ID;
   organizationId: ID;
-  receptionistId: ID;
+  receptionistId: ID | null;
   /** session_id renvoyé par l'API Python (POST /session). */
   backendSessionId: string;
   startedAt: ISODate;
@@ -218,11 +216,12 @@ export interface Conversation {
   status: SessionStatus;
   endReason: EndReason;
   billableSeconds: number;
-  providerCostCents: Cents;
-  providerCostOrigin: DataOrigin;
+  /** Coût fournisseur : null tant que le backend ne l'a pas renseigné. */
+  providerCostCents: Cents | null;
+  providerCostOrigin: DataOrigin | null;
   error: string | null;
-  /** Transcription conservée uniquement si l'entreprise l'a activée. Jamais générée en démo. */
-  transcriptAvailable: false;
+  /** Transcription conservée uniquement si l'entreprise l'a activée. */
+  transcriptAvailable: boolean;
 }
 
 export interface ConversationEvent {
@@ -237,7 +236,7 @@ export interface ConversationEvent {
 export interface UsageRecord {
   id: ID;
   organizationId: ID;
-  /** Jour (AAAA-MM-JJ). Agrégat quotidien fourni par le backend. */
+  /** Jour (AAAA-MM-JJ, Europe/Zurich). Agrégat dérivé des conversations écrites par le backend. */
   day: string;
   sessions: number;
   billableSeconds: number;
@@ -301,7 +300,7 @@ export interface MinuteTopup {
   status: "requested" | "pending" | "applied" | "rejected";
   requestedAt: ISODate;
   appliedAt: ISODate | null;
-  requestedBy: ID;
+  requestedBy: ID | null;
 }
 
 export interface ConcurrencyEntitlement {
@@ -324,7 +323,7 @@ export interface InvoiceLine {
 export interface Invoice {
   id: ID;
   organizationId: ID;
-  /** Numéro de démonstration : préfixe DEMO-, jamais un numéro officiel. */
+  /** Numéro attribué à l'émission. */
   number: string;
   issuedAt: ISODate;
   dueAt: ISODate;
@@ -332,6 +331,8 @@ export interface Invoice {
   lines: InvoiceLine[];
   totalCents: Cents;
   kind: "invoice" | "credit_note";
+  /** Pour un avoir : facture créditée. */
+  creditedInvoiceId?: ID | null;
 }
 
 export interface Payment {
@@ -374,7 +375,7 @@ export interface SupportRequest {
   status: "open" | "in_progress" | "resolved" | "closed";
   createdAt: ISODate;
   updatedAt: ISODate;
-  createdBy: ID;
+  createdBy: ID | null;
 }
 
 export interface Notification {
@@ -391,7 +392,7 @@ export interface Notification {
 export interface AuditEvent {
   id: ID;
   organizationId: ID | null;
-  actorId: ID;
+  actorId: ID | null;
   action: string;
   target: string;
   detail: string;
@@ -430,38 +431,4 @@ export interface PlatformSettings {
   sessionTimeoutMinutes: number;
   require2fa: boolean;
   notifyEmail: string;
-}
-
-/** Ensemble des données de démonstration persistées localement. */
-export interface DemoStore {
-  version: number;
-  generatedAt: ISODate;
-  users: User[];
-  organizationUsers: OrganizationUser[];
-  organizations: Organization[];
-  websiteDomains: WebsiteDomain[];
-  avatars: Avatar[];
-  receptionists: Receptionist[];
-  knowledgeSources: KnowledgeSource[];
-  knowledgeDocuments: KnowledgeDocument[];
-  widgetInstallations: WidgetInstallation[];
-  conversations: Conversation[];
-  conversationEvents: ConversationEvent[];
-  usageRecords: UsageRecord[];
-  providerUsage: ProviderUsage[];
-  plans: Plan[];
-  subscriptions: Subscription[];
-  minuteTopups: MinuteTopup[];
-  concurrencyEntitlements: ConcurrencyEntitlement[];
-  invoices: Invoice[];
-  payments: Payment[];
-  visitorRequests: VisitorRequest[];
-  supportRequests: SupportRequest[];
-  notifications: Notification[];
-  auditEvents: AuditEvent[];
-  incidents: Incident[];
-  providerStatuses: ProviderStatus[];
-  settings: PlatformSettings;
-  /** Paramètres de facturation (optionnels : valeurs par défaut dans lib/repositories/billing.ts). */
-  billingSettings?: { [key: string]: unknown };
 }

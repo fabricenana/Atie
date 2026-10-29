@@ -7,7 +7,7 @@ export function Stat({
   value,
   hint,
   icon,
-  origin = "demo",
+  origin = null,
   tone,
   className,
 }: {
@@ -15,7 +15,7 @@ export function Stat({
   value: ReactNode;
   hint?: ReactNode;
   icon?: ReactNode;
-  origin?: "demo" | "estimated" | "measured" | null;
+  origin?: "estimated" | "measured" | null;
   tone?: "warning" | "danger";
   className?: string;
 }) {

@@ -2,14 +2,14 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { requireAdmin } from "@/lib/auth/session";
 import { can } from "@/lib/auth/permissions";
-import { getAvatar, getOrganization, listAvatars, listOrganizations, listReceptionists } from "@/lib/repositories";
+import { listAvatars, listOrganizations, listReceptionists } from "@/lib/repositories";
 import { updateReceptionist } from "@/lib/actions/receptionists";
 import { RECEPTIONIST_STATUS } from "@/lib/labels";
 import { LANGS } from "@/lib/domain/types";
 import { formatDateTime, formatRelative, LANG_LABELS } from "@/lib/format";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Card, CardBody, CardHeader, DefinitionList } from "@/components/ui/Card";
-import { OriginTag, StatusBadge } from "@/components/ui/Badge";
+import { StatusBadge } from "@/components/ui/Badge";
 import { ActionForm, SubmitButton } from "@/components/ui/ActionForm";
 import { FieldError, SelectField, TextAreaField, TextField } from "@/components/ui/FormFields";
 import { Checkbox, FormGrid } from "@/components/ui/Field";
@@ -22,15 +22,16 @@ export const metadata: Metadata = { title: "Configuration de la réceptionniste"
 export default async function ReceptionistPage({ params }: { params: Promise<{ id: string }> }) {
   const v = await requireAdmin("org.read_all");
   const { id } = await params;
-  const r = listReceptionists().find((x) => x.id === id);
+  const [receptionists, avatars, organizations] = await Promise.all([listReceptionists(), listAvatars(), listOrganizations()]);
+  const r = receptionists.find((x) => x.id === id);
   if (!r) notFound();
   const canWrite = can(v.role, "receptionist.write");
-  const avatar = getAvatar(r.avatarId);
-  const org = r.organizationId ? getOrganization(r.organizationId) : null;
-  const taken = new Set(listReceptionists().filter((x) => x.id !== r.id && x.organizationId).map((x) => x.organizationId));
+  const avatar = avatars.find((a) => a.id === r.avatarId) ?? null;
+  const org = r.organizationId ? organizations.find((o) => o.id === r.organizationId) ?? null : null;
+  const taken = new Set(receptionists.filter((x) => x.id !== r.id && x.organizationId).map((x) => x.organizationId));
   const orgOptions = [
     { value: "", label: "Aucune entreprise (non associée)" },
-    ...listOrganizations().map((o) => ({ value: o.id, label: taken.has(o.id) ? `${o.name} — déjà équipée` : o.name, disabled: taken.has(o.id) })),
+    ...organizations.map((o) => ({ value: o.id, label: taken.has(o.id) ? `${o.name} — déjà équipée` : o.name, disabled: taken.has(o.id) })),
   ];
 
   return (
@@ -42,7 +43,6 @@ export default async function ReceptionistPage({ params }: { params: Promise<{ i
         meta={
           <>
             <StatusBadge status={RECEPTIONIST_STATUS[r.status]} />
-            <OriginTag origin="demo" />
           </>
         }
         actions={org ? <ButtonLink href={`/admin/entreprises/${org.id}?tab=receptionniste`}>Dossier {org.name}</ButtonLink> : null}
@@ -63,7 +63,7 @@ export default async function ReceptionistPage({ params }: { params: Promise<{ i
                     label="Avatar LemonSlice"
                     name="avatarId"
                     defaultValue={r.avatarId}
-                    options={listAvatars().map((a) => ({ value: a.id, label: `${a.name} — ${a.providerAvatarId}` }))}
+                    options={avatars.map((a) => ({ value: a.id, label: `${a.name} — ${a.providerAvatarId}` }))}
                     hint="Choix parmi les avatars existants uniquement. Aucun avatar n’est créé ni modifié chez le fournisseur."
                   />
                   <TextField label="Identifiant fournisseur (lecture seule)" name="providerAvatarId" defaultValue={avatar?.providerAvatarId ?? ""} readOnly aria-readonly className="sm:col-span-2" />
@@ -142,7 +142,7 @@ export default async function ReceptionistPage({ params }: { params: Promise<{ i
           </fieldset>
           {canWrite ? (
             <div className="flex flex-wrap items-center justify-end gap-3">
-              <p className="text-[12.5px] text-muted">Enregistrement local uniquement : rien n’est envoyé à l’agent ni à LemonSlice.</p>
+              <p className="text-[12.5px] text-muted">Enregistré dans la base de la console ; pas encore transmis automatiquement à l’agent Python ni à LemonSlice.</p>
               <SubmitButton>Enregistrer la configuration</SubmitButton>
             </div>
           ) : (

@@ -12,7 +12,7 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { Card, CardBody, CardHeader } from "@/components/ui/Card";
 import { Tabs } from "@/components/ui/Tabs";
 import { DataTable, type Column, type Row } from "@/components/ui/DataTable";
-import { Badge, OriginTag, StatusBadge } from "@/components/ui/Badge";
+import { Badge, StatusBadge } from "@/components/ui/Badge";
 import { Notice } from "@/components/ui/Notice";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { RequestStatusForm } from "@/components/client/RequestStatusForm";
@@ -27,9 +27,7 @@ export default async function ClientRequests({ searchParams }: { searchParams: P
   const sp = await searchParams;
   const tab: Tab = sp.tab === "interactions" || sp.tab === "notifications" ? sp.tab : "demandes";
   const org = v.organization;
-  const requests = listVisitorRequestsForOrg(org.id);
-  const interactions = clientInteractions(org.id);
-  const notifications = listNotifications(org.id);
+  const [requests, interactions, notifications] = await Promise.all([listVisitorRequestsForOrg(org.id), clientInteractions(org.id), listNotifications(org.id)]);
   const unread = notifications.filter((n) => !n.readAt).length;
   const canUpdate = can(v.role, "client.requests.update");
 
@@ -43,7 +41,7 @@ export default async function ClientRequests({ searchParams }: { searchParams: P
 
   return (
     <>
-      <PageHeader title="Conversations et demandes" description="Ce que vos visiteurs ont demandé à votre réceptionniste, et l’historique des échanges." meta={<OriginTag origin="demo" />} />
+      <PageHeader title="Conversations et demandes" description="Ce que vos visiteurs ont demandé à votre réceptionniste, et l’historique des échanges." />
       <Tabs
         label="Rubriques"
         current={tab}

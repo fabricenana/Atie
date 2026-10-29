@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const v = await requireAdmin();
-  const unread = listNotifications(null).filter((n) => !n.readAt).length;
+  const unread = (await listNotifications(null)).filter((n) => !n.readAt).length;
   return (
     <AppShell
       space="admin"

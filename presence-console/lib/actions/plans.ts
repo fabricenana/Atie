@@ -4,13 +4,13 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { fieldErrors, type ActionResult } from "../action-result";
 import { assertPermission, ForbiddenError } from "../auth/session";
-import { mutateStore, newId } from "../demo/store";
-import { audit } from "./audit";
+import { audit, isUuid, one, pgCode, withStaff } from "../db";
+import { loadPlatformSettings } from "../settings";
 
 /**
- * Formules, abonnements, recharges et concurrence — modifications locales de démonstration.
- * En production, ces écritures passeront par le backend commercial ; le backend Python
- * reste l'autorité pour la consommation et les quotas appliqués aux sessions.
+ * Formules, abonnements, recharges et concurrence — écrits en base par ATIE.
+ * Aucun prestataire de paiement n'est connecté : aucune opération financière n'est déclenchée.
+ * Le backend Python reste l'autorité pour la consommation appliquée aux sessions.
  */
 
 const fail = (e: unknown): ActionResult => ({
@@ -19,9 +19,10 @@ const fail = (e: unknown): ActionResult => ({
 });
 
 const chfToCents = (v: string) => Math.round(Number(v.replace(",", ".")) * 100);
+const uuid = (msg: string) => z.string().refine(isUuid, msg);
 
 const planSchema = z.object({
-  id: z.string().optional(),
+  id: z.string().refine(isUuid, "Formule introuvable.").optional(),
   name: z.string().trim().min(2, "Nom trop court.").max(40, "40 caractères au plus."),
   code: z
     .string()
@@ -55,42 +56,44 @@ export async function savePlan(_prev: ActionResult, data: FormData): Promise<Act
     });
     if (!parsed.success) return { ok: false, message: "Vérifiez les champs signalés.", errors: fieldErrors(parsed.error.issues) };
     const p = parsed.data;
-    const result = await mutateStore<ActionResult>((s) => {
-      if (s.plans.some((x) => x.code === p.code && x.id !== p.id)) {
+    const cents = chfToCents(p.price);
+    const summary = `${(cents / 100).toFixed(2)} CHF / ${p.includedMinutes} min`;
+    const result = await withStaff<ActionResult>(async (q) => {
+      if (await one(q, "SELECT 1 FROM plans WHERE code = $1 AND ($2::uuid IS NULL OR id <> $2::uuid)", [p.code, p.id ?? null])) {
         return { ok: false, message: "Ce code est déjà utilisé.", errors: { code: "Code déjà utilisé par une autre formule." } };
       }
-      const now = new Date().toISOString();
-      const values = {
-        name: p.name,
-        code: p.code,
-        monthlyPriceCents: chfToCents(p.price),
-        includedMinutes: p.includedMinutes,
-        concurrentSessions: p.concurrentSessions,
-        approval: p.approval,
-        description: p.description,
-        active: p.active,
-      };
+      const values = [p.name, p.code, cents, p.includedMinutes, p.concurrentSessions, p.approval, p.description, p.active];
       if (p.id) {
-        const plan = s.plans.find((x) => x.id === p.id);
+        const plan = await one<{ name: string }>(
+          q,
+          `UPDATE plans SET name = $2, code = $3, monthly_price_cents = $4, included_minutes = $5, concurrent_sessions = $6,
+                  approval = $7::plan_approval, description = $8, active = $9, updated_at = now()
+            WHERE id = $1 RETURNING name`,
+          [p.id, ...values],
+        );
         if (!plan) return { ok: false, message: "Formule introuvable." };
-        Object.assign(plan, values, { updatedAt: now });
-        audit(s, v.user.id, null, "plan.update", plan.name, `${(values.monthlyPriceCents / 100).toFixed(2)} CHF / ${values.includedMinutes} min`);
-        return { ok: true, message: `Formule « ${plan.name} » enregistrée (démo).` };
+        await audit(q, v.user.id, null, "plan.update", plan.name, summary);
+        return { ok: true, message: `Formule « ${plan.name} » enregistrée.` };
       }
-      s.plans.push({ id: newId("pln"), ...values, createdAt: now, updatedAt: now });
-      audit(s, v.user.id, null, "plan.create", p.name, `${(values.monthlyPriceCents / 100).toFixed(2)} CHF / ${values.includedMinutes} min`);
-      return { ok: true, message: `Formule « ${p.name} » créée (démo).` };
+      await q.query(
+        `INSERT INTO plans (name, code, monthly_price_cents, included_minutes, concurrent_sessions, approval, description, active)
+         VALUES ($1, $2, $3, $4, $5, $6::plan_approval, $7, $8)`,
+        values,
+      );
+      await audit(q, v.user.id, null, "plan.create", p.name, summary);
+      return { ok: true, message: `Formule « ${p.name} » créée.` };
     });
     if (result.ok) revalidatePath("/admin/abonnements", "layout");
     return result;
   } catch (e) {
+    if (pgCode(e) === "23505") return { ok: false, message: "Ce code est déjà utilisé.", errors: { code: "Code déjà utilisé." } };
     return fail(e);
   }
 }
 
 const subSchema = z.object({
-  subscriptionId: z.string().min(1),
-  planId: z.string().min(1, "Choisissez une formule."),
+  subscriptionId: uuid("Abonnement introuvable."),
+  planId: uuid("Choisissez une formule."),
   alertThresholdPct: z.coerce.number().int("Nombre entier.").min(50, "Entre 50 et 100 %.").max(100, "Entre 50 et 100 %."),
   autoRenew: z.boolean(),
 });
@@ -106,25 +109,31 @@ export async function updateSubscription(_prev: ActionResult, data: FormData): P
     });
     if (!parsed.success) return { ok: false, message: "Vérifiez les champs signalés.", errors: fieldErrors(parsed.error.issues) };
     const p = parsed.data;
-    const result = await mutateStore<ActionResult>((s) => {
-      const sub = s.subscriptions.find((x) => x.id === p.subscriptionId);
-      const plan = s.plans.find((x) => x.id === p.planId);
+    const result = await withStaff<ActionResult>(async (q) => {
+      const sub = await one<{ organizationId: string; planId: string; orgName: string }>(
+        q,
+        `SELECT s.organization_id AS "organizationId", s.plan_id AS "planId", o.name AS "orgName"
+           FROM subscriptions s JOIN organizations o ON o.id = s.organization_id WHERE s.id = $1 FOR UPDATE OF s`,
+        [p.subscriptionId],
+      );
+      const plan = await one<{ name: string }>(q, "SELECT name FROM plans WHERE id = $1", [p.planId]);
       if (!sub || !plan) return { ok: false, message: "Abonnement ou formule introuvable." };
-      const org = s.organizations.find((o) => o.id === sub.organizationId);
-      const changed = sub.planId !== plan.id;
-      sub.planId = plan.id;
-      sub.alertThresholdPct = p.alertThresholdPct;
-      sub.autoRenew = p.autoRenew;
-      sub.updatedAt = new Date().toISOString();
-      audit(
-        s,
+      await q.query("UPDATE subscriptions SET plan_id = $2, alert_threshold_pct = $3, auto_renew = $4, updated_at = now() WHERE id = $1", [
+        p.subscriptionId,
+        p.planId,
+        p.alertThresholdPct,
+        p.autoRenew,
+      ]);
+      const changed = sub.planId !== p.planId;
+      await audit(
+        q,
         v.user.id,
         sub.organizationId,
         "subscription.update",
-        org?.name ?? sub.organizationId,
+        sub.orgName,
         `${changed ? `Formule ${plan.name}, ` : ""}alerte ${p.alertThresholdPct} %, renouvellement ${p.autoRenew ? "auto" : "manuel"}`,
       );
-      return { ok: true, message: `Abonnement de ${org?.name ?? "l’entreprise"} mis à jour (démo, aucune facturation).` };
+      return { ok: true, message: `Abonnement de ${sub.orgName} mis à jour (aucune facturation automatique).` };
     });
     if (result.ok) revalidatePath("/admin", "layout");
     return result;
@@ -134,8 +143,8 @@ export async function updateSubscription(_prev: ActionResult, data: FormData): P
 }
 
 const assignSchema = z.object({
-  organizationId: z.string().min(1, "Choisissez une entreprise."),
-  planId: z.string().min(1, "Choisissez une formule."),
+  organizationId: uuid("Choisissez une entreprise."),
+  planId: uuid("Choisissez une formule."),
   activatedAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Date invalide."),
   status: z.enum(["trialing", "active"], { message: "Statut invalide." }),
 });
@@ -151,41 +160,43 @@ export async function assignPlan(_prev: ActionResult, data: FormData): Promise<A
     });
     if (!parsed.success) return { ok: false, message: "Vérifiez les champs signalés.", errors: fieldErrors(parsed.error.issues) };
     const p = parsed.data;
-    const result = await mutateStore<ActionResult>((s) => {
-      const org = s.organizations.find((o) => o.id === p.organizationId);
-      const plan = s.plans.find((x) => x.id === p.planId);
+    const start = new Date(`${p.activatedAt}T00:00:00Z`);
+    if (Number.isNaN(start.getTime())) return { ok: false, message: "Date invalide.", errors: { activatedAt: "Date invalide." } };
+    const end = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + 1, start.getUTCDate()));
+    const result = await withStaff<ActionResult>(async (q) => {
+      const org = await one<{ name: string; status: string }>(q, "SELECT name, status::text AS status FROM organizations WHERE id = $1 FOR UPDATE", [p.organizationId]);
+      const plan = await one<{ name: string }>(q, "SELECT name FROM plans WHERE id = $1", [p.planId]);
       if (!org || !plan) return { ok: false, message: "Entreprise ou formule introuvable." };
-      if (s.subscriptions.some((x) => x.organizationId === org.id && x.status !== "canceled")) {
+      if (await one(q, "SELECT 1 FROM subscriptions WHERE organization_id = $1 AND status <> 'canceled'", [p.organizationId])) {
         return { ok: false, message: "Cette entreprise a déjà un abonnement. Modifiez-le plutôt.", errors: { organizationId: "Abonnement existant." } };
       }
-      const start = new Date(`${p.activatedAt}T00:00:00Z`);
-      const end = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + 1, start.getUTCDate()));
-      const now = new Date().toISOString();
-      s.subscriptions.push({
-        id: newId("sub"),
-        organizationId: org.id,
-        planId: plan.id,
-        status: p.status,
-        activatedAt: start.toISOString(),
-        currentPeriodStart: start.toISOString(),
-        currentPeriodEnd: end.toISOString(),
-        autoRenew: true,
-        alertThresholdPct: s.settings.quotaAlertPct,
-        createdAt: now,
-        updatedAt: now,
-      });
-      audit(s, v.user.id, org.id, "subscription.create", org.name, `Formule ${plan.name} dès le ${p.activatedAt}`);
-      return { ok: true, message: `Formule ${plan.name} attribuée à ${org.name} (démo, aucune facturation).` };
+      const settings = await loadPlatformSettings(q);
+      await q.query(
+        `INSERT INTO subscriptions (organization_id, plan_id, status, activated_at, current_period_start, current_period_end, alert_threshold_pct)
+         VALUES ($1, $2, $3::subscription_status, $4, $4, $5, $6)`,
+        [p.organizationId, p.planId, p.status, start.toISOString(), end.toISOString(), settings.quotaAlertPct],
+      );
+      // Première activation : l'entreprise passe en essai ou en service.
+      if (org.status === "onboarding") {
+        await q.query("UPDATE organizations SET status = $2::org_status, activated_at = coalesce(activated_at, $3), updated_at = now() WHERE id = $1", [
+          p.organizationId,
+          p.status === "trialing" ? "trial" : "active",
+          start.toISOString(),
+        ]);
+      }
+      await audit(q, v.user.id, p.organizationId, "subscription.create", org.name, `Formule ${plan.name} dès le ${p.activatedAt}`);
+      return { ok: true, message: `Formule ${plan.name} attribuée à ${org.name} (aucune facturation automatique).` };
     });
     if (result.ok) revalidatePath("/admin", "layout");
     return result;
   } catch (e) {
+    if (pgCode(e) === "23505") return { ok: false, message: "Cette entreprise a déjà un abonnement.", errors: { organizationId: "Abonnement existant." } };
     return fail(e);
   }
 }
 
 const topupSchema = z.object({
-  organizationId: z.string().min(1, "Choisissez une entreprise."),
+  organizationId: uuid("Choisissez une entreprise."),
   minutes: z.coerce.number().int("Nombre entier.").min(10, "10 minutes au moins.").max(5000, "5000 minutes au plus."),
   price: z
     .string()
@@ -199,21 +210,17 @@ export async function createTopup(_prev: ActionResult, data: FormData): Promise<
     const parsed = topupSchema.safeParse({ organizationId: data.get("organizationId") ?? "", minutes: data.get("minutes") ?? "", price: data.get("price") ?? "" });
     if (!parsed.success) return { ok: false, message: "Vérifiez les champs signalés.", errors: fieldErrors(parsed.error.issues) };
     const p = parsed.data;
-    const result = await mutateStore<ActionResult>((s) => {
-      const org = s.organizations.find((o) => o.id === p.organizationId);
+    const result = await withStaff<ActionResult>(async (q) => {
+      const org = await one<{ name: string }>(q, "SELECT name FROM organizations WHERE id = $1", [p.organizationId]);
       if (!org) return { ok: false, message: "Entreprise introuvable." };
-      s.minuteTopups.push({
-        id: newId("top"),
-        organizationId: org.id,
-        minutes: p.minutes,
-        priceCents: chfToCents(p.price),
-        status: "pending",
-        requestedAt: new Date().toISOString(),
-        appliedAt: null,
-        requestedBy: v.user.id,
-      });
-      audit(s, v.user.id, org.id, "topup.create", org.name, `${p.minutes} min`);
-      return { ok: true, message: `Recharge de ${p.minutes} min préparée pour ${org.name} (en attente, démo).` };
+      await q.query("INSERT INTO minute_topups (organization_id, minutes, price_cents, status, requested_by) VALUES ($1, $2, $3, 'pending', $4)", [
+        p.organizationId,
+        p.minutes,
+        chfToCents(p.price),
+        v.user.id,
+      ]);
+      await audit(q, v.user.id, p.organizationId, "topup.create", org.name, `${p.minutes} min`);
+      return { ok: true, message: `Recharge de ${p.minutes} min préparée pour ${org.name} (en attente).` };
     });
     if (result.ok) revalidatePath("/admin", "layout");
     return result;
@@ -227,20 +234,21 @@ export async function decideTopup(payload: Record<string, string>): Promise<Acti
     const v = await assertPermission("subscription.write");
     const decision = payload.decision === "apply" ? "applied" : payload.decision === "reject" ? "rejected" : null;
     if (!decision) return { ok: false, message: "Décision invalide." };
-    const result = await mutateStore<ActionResult>((s) => {
-      const t = s.minuteTopups.find((x) => x.id === payload.id);
+    if (!isUuid(payload.id)) return { ok: false, message: "Recharge introuvable." };
+    const result = await withStaff<ActionResult>(async (q) => {
+      const t = await one<{ organizationId: string; minutes: number; status: string; orgName: string }>(
+        q,
+        `SELECT t.organization_id AS "organizationId", t.minutes, t.status, o.name AS "orgName"
+           FROM minute_topups t JOIN organizations o ON o.id = t.organization_id WHERE t.id = $1 FOR UPDATE OF t`,
+        [payload.id],
+      );
       if (!t) return { ok: false, message: "Recharge introuvable." };
       if (t.status !== "pending" && t.status !== "requested") return { ok: false, message: "Cette recharge a déjà été traitée." };
-      const org = s.organizations.find((o) => o.id === t.organizationId);
-      t.status = decision;
-      t.appliedAt = decision === "applied" ? new Date().toISOString() : null;
-      audit(s, v.user.id, t.organizationId, `topup.${decision === "applied" ? "apply" : "reject"}`, org?.name ?? t.organizationId, `${t.minutes} min`);
+      await q.query("UPDATE minute_topups SET status = $2, applied_at = CASE WHEN $2 = 'applied' THEN now() ELSE NULL END WHERE id = $1", [payload.id, decision]);
+      await audit(q, v.user.id, t.organizationId, `topup.${decision === "applied" ? "apply" : "reject"}`, t.orgName, `${t.minutes} min`);
       return {
         ok: true,
-        message:
-          decision === "applied"
-            ? `${t.minutes} min ajoutées au quota de ${org?.name ?? "l’entreprise"} (démo, aucun paiement).`
-            : `Recharge refusée pour ${org?.name ?? "l’entreprise"}.`,
+        message: decision === "applied" ? `${t.minutes} min ajoutées au quota de ${t.orgName} (aucun paiement encaissé).` : `Recharge refusée pour ${t.orgName}.`,
       };
     });
     if (result.ok) revalidatePath("/admin", "layout");
@@ -253,14 +261,19 @@ export async function decideTopup(payload: Record<string, string>): Promise<Acti
 export async function activateConcurrency(payload: Record<string, string>): Promise<ActionResult> {
   try {
     const v = await assertPermission("subscription.write");
-    const result = await mutateStore<ActionResult>((s) => {
-      const c = s.concurrencyEntitlements.find((x) => x.id === payload.id);
+    if (!isUuid(payload.id)) return { ok: false, message: "Option introuvable." };
+    const result = await withStaff<ActionResult>(async (q) => {
+      const c = await one<{ organizationId: string; extraSessions: number; status: string; orgName: string }>(
+        q,
+        `SELECT ce.organization_id AS "organizationId", ce.extra_sessions AS "extraSessions", ce.status, o.name AS "orgName"
+           FROM concurrency_entitlements ce JOIN organizations o ON o.id = ce.organization_id WHERE ce.id = $1 FOR UPDATE OF ce`,
+        [payload.id],
+      );
       if (!c) return { ok: false, message: "Option introuvable." };
       if (c.status !== "requested") return { ok: false, message: "Cette option n’est pas en attente." };
-      const org = s.organizations.find((o) => o.id === c.organizationId);
-      c.status = "active";
-      audit(s, v.user.id, c.organizationId, "concurrency.activate", org?.name ?? c.organizationId, `+${c.extraSessions} session(s) simultanée(s)`);
-      return { ok: true, message: `Concurrence supplémentaire activée pour ${org?.name ?? "l’entreprise"} (démo).` };
+      await q.query("UPDATE concurrency_entitlements SET status = 'active' WHERE id = $1", [payload.id]);
+      await audit(q, v.user.id, c.organizationId, "concurrency.activate", c.orgName, `+${c.extraSessions} session(s) simultanée(s)`);
+      return { ok: true, message: `Concurrence supplémentaire activée pour ${c.orgName}.` };
     });
     if (result.ok) revalidatePath("/admin", "layout");
     return result;

@@ -1,5 +1,4 @@
 import { defineConfig } from "vitest/config";
-import os from "node:os";
 import path from "node:path";
 
 export default defineConfig({
@@ -7,7 +6,17 @@ export default defineConfig({
   test: {
     environment: "node",
     include: ["tests/**/*.test.ts"],
-    // Les tests n'écrivent jamais dans .demo-data du projet.
-    env: { ATIE_DEMO_DATA_DIR: path.join(os.tmpdir(), `atie-console-test-${process.pid}`) },
+    // PostgreSQL en WASM (PGlite) : démarrage et migrations prennent quelques secondes par fichier.
+    testTimeout: 30_000,
+    hookTimeout: 120_000,
+    // Valeurs factices : aucun appel réseau réel (fetch simulé), aucune vraie base.
+    env: {
+      SUPABASE_URL: "https://auth.test.invalid",
+      SUPABASE_ANON_KEY: "cle-anon-de-test",
+      SUPABASE_SERVICE_ROLE_KEY: "cle-service-de-test",
+      ATIE_SESSION_SECRET: "secret-de-session-de-test-0123456789abcdef",
+      ATIE_CONSOLE_URL: "https://console.test.invalid",
+      DATABASE_URL: "",
+    },
   },
 });

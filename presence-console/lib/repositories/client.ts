@@ -1,46 +1,36 @@
 import "server-only";
-import type { ID, Lang } from "../domain/types";
-import { readStore } from "../demo/store";
+import type { ID, Lang, Plan } from "../domain/types";
+import { isUuid, rows } from "../db";
+import { read } from "../db/scope";
+import { PLAN_COLS } from "./sql";
 
 /**
  * Lectures propres à l'espace client. Toujours filtrées par l'organisation
- * de la session (fournie par requireClient), jamais par un paramètre d'URL.
+ * de la session (fournie par requireClient), jamais par un paramètre d'URL ;
+ * la RLS (rôle atie_app) l'impose de toute façon.
  */
 
 /** Recharges proposées : grille validée (lib/domain/pricing.ts). */
 export { TOPUP_OPTIONS } from "../domain/pricing";
 
 /** Répartition des langues des visiteurs (conversations abouties). */
-export function visitorLanguagesForOrg(orgId: ID, sinceIso?: string) {
-  const counts = new Map<Lang, number>();
-  let total = 0;
-  for (const c of readStore().conversations) {
-    if (c.organizationId !== orgId || c.status === "failed") continue;
-    if (sinceIso && c.startedAt < sinceIso) continue;
-    counts.set(c.lang, (counts.get(c.lang) ?? 0) + 1);
-    total++;
-  }
+export async function visitorLanguagesForOrg(orgId: ID, sinceIso?: string) {
+  if (!isUuid(orgId)) return { total: 0, items: [] as Array<{ lang: Lang; n: number; pct: number }> };
+  const list = await read((q) =>
+    rows<{ lang: Lang; n: number }>(
+      q,
+      `SELECT c.lang::text AS lang, count(*)::int AS n
+         FROM conversations c
+        WHERE c.organization_id = $1 AND c.status <> 'failed' AND ($2::timestamptz IS NULL OR c.started_at >= $2::timestamptz)
+        GROUP BY 1`,
+      [orgId, sinceIso ?? null],
+    ),
+  );
+  const total = list.reduce((s, x) => s + x.n, 0);
   return {
     total,
-    items: [...counts.entries()].map(([lang, n]) => ({ lang, n, pct: total ? Math.round((n / total) * 100) : 0 })).sort((a, b) => b.n - a.n),
+    items: list.map(({ lang, n }) => ({ lang, n, pct: total ? Math.round((n / total) * 100) : 0 })).sort((a, b) => b.n - a.n),
   };
-}
-
-/**
- * Conversations présentées au client : uniquement les champs autorisés
- * (date, durée, langue, statut). Ni coût fournisseur, ni identifiant technique,
- * ni transcription.
- */
-export function clientInteractions(orgId: ID) {
-  return readStore()
-    .conversations.filter((c) => c.organizationId === orgId)
-    .map((c) => ({
-      id: c.id,
-      startedAt: c.startedAt,
-      durationSeconds: c.durationSeconds,
-      lang: c.lang,
-      outcome: clientOutcome(c.status),
-    }));
 }
 
 export type ClientOutcome = "in_progress" | "completed" | "interrupted";
@@ -51,6 +41,24 @@ function clientOutcome(status: string): ClientOutcome {
   return "interrupted";
 }
 
+/**
+ * Conversations présentées au client : uniquement les champs autorisés
+ * (date, durée, langue, statut). Ni coût fournisseur, ni identifiant technique,
+ * ni transcription.
+ */
+export async function clientInteractions(orgId: ID) {
+  if (!isUuid(orgId)) return [];
+  const list = await read((q) =>
+    rows<{ id: ID; startedAt: string; durationSeconds: number; lang: Lang; status: string }>(
+      q,
+      `SELECT c.id, c.started_at AS "startedAt", c.duration_seconds AS "durationSeconds", c.lang::text AS lang, c.status::text AS status
+         FROM conversations c WHERE c.organization_id = $1 ORDER BY c.started_at DESC LIMIT 1000`,
+      [orgId],
+    ),
+  );
+  return list.map(({ status, ...c }) => ({ ...c, outcome: clientOutcome(status) }));
+}
+
 export const CLIENT_OUTCOME = {
   in_progress: { label: "En cours", tone: "success" },
   completed: { label: "Terminée", tone: "neutral" },
@@ -58,6 +66,5 @@ export const CLIENT_OUTCOME = {
 } as const;
 
 /** Offres affichables au client (actives uniquement). */
-export function activePlans() {
-  return readStore().plans.filter((p) => p.active);
-}
+export const activePlans = () =>
+  read((q) => rows<Plan>(q, `SELECT ${PLAN_COLS} FROM plans p WHERE p.active ORDER BY p.monthly_price_cents, p.name`));

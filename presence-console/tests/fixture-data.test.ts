@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { buildSeed } from "@/lib/demo/seed";
+import { buildSeed } from "./fixtures/seed";
 import { PROVIDER_COST_CENTS_PER_MIN, TOPUP_OPTIONS } from "@/lib/domain/pricing";
 
 const now = new Date("2026-10-29T10:00:00Z");
 const s = buildSeed(now);
 
-describe("données de démonstration", () => {
+describe("jeu de données de test (fixture)", () => {
   it("sont déterministes", () => {
     expect(JSON.stringify(buildSeed(now))).toBe(JSON.stringify(s));
   });
@@ -37,7 +37,9 @@ describe("données de démonstration", () => {
   });
 
   it("sont toutes identifiées comme fictives", () => {
-    for (const o of s.organizations) expect(o.demo).toBe(true);
+    // Le champ `demo` n'existe plus dans le domaine : les entreprises de test se reconnaissent
+    // à leurs adresses en .example (jamais livrées : la fixture n'est chargée que par les tests).
+    for (const o of s.organizations) expect(o.contactEmail.endsWith(".example")).toBe(true);
     for (const u of s.users) expect(u.email.endsWith(".example")).toBe(true);
     for (const i of s.invoices) expect(i.number.startsWith("DEMO-")).toBe(true);
     for (const w of s.widgetInstallations) expect(w.publicKey.startsWith("pk_demo_")).toBe(true);

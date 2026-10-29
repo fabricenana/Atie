@@ -3,13 +3,13 @@ import type { Metadata } from "next";
 import { Plus } from "lucide-react";
 import { requireAdmin } from "@/lib/auth/session";
 import { can } from "@/lib/auth/permissions";
-import { getAvatar, getOrganization, listAvatars, listReceptionists } from "@/lib/repositories";
+import { listAvatars, listOrganizations, listReceptionists } from "@/lib/repositories";
 import { RECEPTIONIST_STATUS } from "@/lib/labels";
 import type { ReceptionistStatus } from "@/lib/domain/types";
 import { formatDuration, formatRelative, LANG_SHORT } from "@/lib/format";
 import { cn } from "@/lib/cn";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { OriginTag, StatusBadge } from "@/components/ui/Badge";
+import { StatusBadge } from "@/components/ui/Badge";
 import { ButtonLink } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -20,8 +20,9 @@ export const metadata: Metadata = { title: "Réceptionnistes" };
 export default async function ReceptionistsPage({ searchParams }: { searchParams: Promise<{ status?: string; avatar?: string }> }) {
   const v = await requireAdmin("org.read_all");
   const sp = await searchParams;
-  const all = listReceptionists();
-  const avatars = listAvatars();
+  const [all, avatars, orgs] = await Promise.all([listReceptionists(), listAvatars(), listOrganizations()]);
+  const avatarById = new Map(avatars.map((a) => [a.id, a]));
+  const orgById = new Map(orgs.map((o) => [o.id, o]));
   const status = Object.keys(RECEPTIONIST_STATUS).includes(sp.status ?? "") ? (sp.status as ReceptionistStatus) : null;
   const avatar = avatars.some((a) => a.id === sp.avatar) ? sp.avatar! : null;
   const list = all.filter((r) => (!status || r.status === status) && (!avatar || r.avatarId === avatar));
@@ -46,7 +47,6 @@ export default async function ReceptionistsPage({ searchParams }: { searchParams
       <PageHeader
         title="Réceptionnistes numériques"
         description="Personnages animés LemonSlice configurés pour les entreprises clientes. Les avatars existants (Léa, Maya) sont réutilisés, jamais recréés."
-        meta={<OriginTag origin="demo" />}
         actions={
           can(v.role, "receptionist.write") ? (
             <ButtonLink href="/admin/receptionnistes/nouvelle" variant="primary">
@@ -81,13 +81,17 @@ export default async function ReceptionistsPage({ searchParams }: { searchParams
 
       {list.length === 0 ? (
         <Card>
-          <EmptyState title="Aucune réceptionniste" description="Aucune réceptionniste ne correspond à ces filtres." action={<ButtonLink href="/admin/receptionnistes">Réinitialiser les filtres</ButtonLink>} />
+          {all.length === 0 ? (
+            <EmptyState title="Aucune réceptionniste" description="Créez la première réceptionniste à partir d’un avatar existant (Léa ou Maya)." />
+          ) : (
+            <EmptyState title="Aucune réceptionniste" description="Aucune réceptionniste ne correspond à ces filtres." action={<ButtonLink href="/admin/receptionnistes">Réinitialiser les filtres</ButtonLink>} />
+          )}
         </Card>
       ) : (
         <ul className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3">
           {list.map((r) => {
-            const av = getAvatar(r.avatarId);
-            const org = r.organizationId ? getOrganization(r.organizationId) : null;
+            const av = avatarById.get(r.avatarId);
+            const org = r.organizationId ? orgById.get(r.organizationId) : null;
             return (
               <li key={r.id}>
                 <Link

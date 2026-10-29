@@ -4,11 +4,12 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { fieldErrors, type ActionResult } from "../action-result";
 import { assertPermission, ForbiddenError } from "../auth/session";
-import { mutateStore, newId, resetStore } from "../demo/store";
+import { inviteAccount } from "../auth/invite";
+import { audit, isUuid, one, pgCode, rows, withStaff } from "../db";
 import { LANGS, type Lang } from "../domain/types";
-import { audit } from "./audit";
+import { loadPlatformSettings, saveSettings } from "../settings";
 
-/** Paramètres de la plateforme, utilisateurs internes, notifications (démo locale). */
+/** Paramètres de la plateforme, utilisateurs internes, notifications (atie.settings, atie.users). */
 
 const fail = (e: unknown): ActionResult => ({
   ok: false,
@@ -33,10 +34,9 @@ export async function updateProfile(_prev: ActionResult, data: FormData): Promis
       .object({ fullName: z.string().trim().min(2, "Nom trop court.").max(80, "80 caractères au plus.") })
       .safeParse({ fullName: data.get("fullName") ?? "" });
     if (!parsed.success) return invalid(parsed.error.issues);
-    await mutateStore((s) => {
-      const u = s.users.find((x) => x.id === v.user.id);
-      if (u) u.fullName = parsed.data.fullName;
-      audit(s, v.user.id, null, "user.profile", parsed.data.fullName, "Profil mis à jour");
+    await withStaff(async (q) => {
+      await q.query("UPDATE users SET full_name = $2, updated_at = now() WHERE id = $1", [v.user.id, parsed.data.fullName]);
+      await audit(q, v.user.id, null, "user.profile", parsed.data.fullName, "Profil mis à jour");
     });
     return done("Profil enregistré.");
   } catch (e) {
@@ -62,15 +62,18 @@ export async function savePlatformSettings(_prev: ActionResult, data: FormData):
       });
     if (!parsed.success) return invalid(parsed.error.issues);
     const p = parsed.data;
-    const r = await mutateStore<ActionResult | null>((s) => {
-      if (!s.settings.enabledLangs.includes(p.defaultLang)) {
+    const r = await withStaff<ActionResult | null>(async (q) => {
+      const s = await loadPlatformSettings(q);
+      if (!s.enabledLangs.includes(p.defaultLang)) {
         return { ok: false, message: "La langue par défaut doit être activée.", errors: { defaultLang: "Activez d’abord cette langue." } };
       }
-      s.settings.platformName = p.platformName;
-      s.settings.defaultLang = p.defaultLang;
-      s.settings.defaultMaxConversationSeconds = Math.round(p.maxMinutes * 60);
-      s.settings.defaultRetentionDays = p.defaultRetentionDays;
-      audit(s, v.user.id, null, "settings.platform", "Paramètres de la plateforme", `Durée max ${p.maxMinutes} min, conservation ${p.defaultRetentionDays} j`);
+      await saveSettings(
+        q,
+        "platform",
+        { platformName: p.platformName, defaultLang: p.defaultLang, defaultMaxConversationSeconds: Math.round(p.maxMinutes * 60), defaultRetentionDays: p.defaultRetentionDays },
+        v.user.id,
+      );
+      await audit(q, v.user.id, null, "settings.platform", "Paramètres de la plateforme", `Durée max ${p.maxMinutes} min, conservation ${p.defaultRetentionDays} j`);
       return null;
     });
     return r ?? done("Paramètres de la plateforme enregistrés.");
@@ -84,12 +87,14 @@ export async function saveLanguages(_prev: ActionResult, data: FormData): Promis
     const v = await assertPermission("settings.write");
     const langs = data.getAll("langs").map(String).filter((l): l is Lang => (LANGS as string[]).includes(l));
     if (langs.length === 0) return { ok: false, message: "Activez au moins une langue.", errors: { langs: "Au moins une langue." } };
-    const r = await mutateStore<ActionResult | null>((s) => {
-      if (!langs.includes(s.settings.defaultLang)) {
+    const r = await withStaff<ActionResult | null>(async (q) => {
+      const s = await loadPlatformSettings(q);
+      if (!langs.includes(s.defaultLang)) {
         return { ok: false, message: "La langue par défaut ne peut pas être désactivée.", errors: { langs: "Changez d’abord la langue par défaut." } };
       }
-      s.settings.enabledLangs = LANGS.filter((l) => langs.includes(l));
-      audit(s, v.user.id, null, "settings.languages", "Langues", s.settings.enabledLangs.join(", ").toUpperCase());
+      const enabledLangs = LANGS.filter((l) => langs.includes(l));
+      await saveSettings(q, "platform", { enabledLangs }, v.user.id);
+      await audit(q, v.user.id, null, "settings.languages", "Langues", enabledLangs.join(", ").toUpperCase());
       return null;
     });
     return r ?? done("Langues enregistrées.");
@@ -108,12 +113,11 @@ export async function saveAlertSettings(_prev: ActionResult, data: FormData): Pr
       })
       .safeParse({ quotaAlertPct: data.get("quotaAlertPct") ?? "", notifyEmail: data.get("notifyEmail") ?? "" });
     if (!parsed.success) return invalid(parsed.error.issues);
-    await mutateStore((s) => {
-      s.settings.quotaAlertPct = parsed.data.quotaAlertPct;
-      s.settings.notifyEmail = parsed.data.notifyEmail;
-      audit(s, v.user.id, null, "settings.alerts", "Alertes de consommation", `Seuil ${parsed.data.quotaAlertPct} %`);
+    await withStaff(async (q) => {
+      await saveSettings(q, "platform", { quotaAlertPct: parsed.data.quotaAlertPct, notifyEmail: parsed.data.notifyEmail }, v.user.id);
+      await audit(q, v.user.id, null, "settings.alerts", "Alertes de consommation", `Seuil ${parsed.data.quotaAlertPct} %`);
     });
-    return done("Alertes de consommation enregistrées. Aucun e-mail n’est envoyé en démonstration.");
+    return done("Alertes de consommation enregistrées. L’envoi d’e-mails d’alerte n’est pas encore connecté.");
   } catch (e) {
     return fail(e);
   }
@@ -129,10 +133,16 @@ export async function saveSecuritySettings(_prev: ActionResult, data: FormData):
       })
       .safeParse({ sessionTimeoutMinutes: data.get("sessionTimeoutMinutes") ?? "", require2fa: data.get("require2fa") === "on" });
     if (!parsed.success) return invalid(parsed.error.issues);
-    await mutateStore((s) => {
-      s.settings.sessionTimeoutMinutes = parsed.data.sessionTimeoutMinutes;
-      s.settings.require2fa = parsed.data.require2fa;
-      audit(s, v.user.id, null, "settings.security", "Sécurité", `Session ${parsed.data.sessionTimeoutMinutes} min, 2FA ${parsed.data.require2fa ? "requise" : "facultative"}`);
+    await withStaff(async (q) => {
+      await saveSettings(q, "platform", parsed.data, v.user.id);
+      await audit(
+        q,
+        v.user.id,
+        null,
+        "settings.security",
+        "Sécurité",
+        `Session ${parsed.data.sessionTimeoutMinutes} min, 2FA ${parsed.data.require2fa ? "requise" : "facultative"}`,
+      );
     });
     return done("Paramètres de sécurité enregistrés. La durée s’applique aux prochaines connexions.");
   } catch (e) {
@@ -143,24 +153,19 @@ export async function saveSecuritySettings(_prev: ActionResult, data: FormData):
 export async function markNotificationsRead(payload: Record<string, string>): Promise<ActionResult> {
   try {
     await assertPermission("admin.access");
-    const count = await mutateStore((s) => {
-      const now = new Date().toISOString();
-      let n = 0;
-      for (const x of s.notifications) {
-        if (x.readAt) continue;
-        if (payload.id === "all" || x.id === payload.id) {
-          x.readAt = now;
-          n++;
-        }
-      }
-      return n;
-    });
-    return done(count > 1 ? `${count} notifications marquées comme lues.` : "Notification marquée comme lue.");
+    const all = payload.id === "all";
+    if (!all && !isUuid(payload.id)) return { ok: false, message: "Notification introuvable." };
+    const updated = await withStaff((q) =>
+      rows(q, "UPDATE notifications SET read_at = now() WHERE read_at IS NULL AND ($1::uuid IS NULL OR id = $1::uuid) RETURNING id", [all ? null : payload.id]),
+    );
+    const count = updated.length;
+    return done(count > 1 ? `${count} notifications marquées comme lues.` : count ? "Notification marquée comme lue." : "Aucune notification à mettre à jour.");
   } catch (e) {
     return fail(e);
   }
 }
 
+/** Invitation d'un membre du personnel ATIE : compte Supabase (e-mail) + atie.users avec rôle interne. */
 export async function inviteUser(_prev: ActionResult, data: FormData): Promise<ActionResult> {
   try {
     const v = await assertPermission("users.manage");
@@ -173,15 +178,30 @@ export async function inviteUser(_prev: ActionResult, data: FormData): Promise<A
       .safeParse({ fullName: data.get("fullName") ?? "", email: data.get("email") ?? "", role: data.get("role") ?? "" });
     if (!parsed.success) return invalid(parsed.error.issues);
     const p = parsed.data;
-    const r = await mutateStore<ActionResult | null>((s) => {
-      if (s.users.some((u) => u.email === p.email)) return { ok: false, message: "Cette adresse est déjà utilisée.", errors: { email: "Adresse déjà utilisée." } };
-      const now = new Date().toISOString();
-      s.users.push({ id: newId("usr"), email: p.email, fullName: p.fullName, atieRole: p.role, status: "invited", lastLoginAt: null, createdAt: now, demo: true });
-      audit(s, v.user.id, null, "user.invite", p.fullName, p.role);
-      return null;
+    const dup = await withStaff((q) => one(q, "SELECT 1 FROM users WHERE email = $1", [p.email]));
+    if (dup) return { ok: false, message: "Cette adresse est déjà utilisée.", errors: { email: "Adresse déjà utilisée." } };
+    let account;
+    try {
+      account = await inviteAccount(p.email, p.fullName);
+    } catch {
+      return { ok: false, message: "Invitation impossible : le service d’authentification ne répond pas. Rien n’a été enregistré." };
+    }
+    await withStaff(async (q) => {
+      await q.query("INSERT INTO users (email, full_name, atie_role, status, idp_subject) VALUES ($1, $2, $3::atie_role, 'invited', $4)", [
+        p.email,
+        p.fullName,
+        p.role,
+        account.subject,
+      ]);
+      await audit(q, v.user.id, null, "user.invite", p.fullName, p.role);
     });
-    return r ?? done(`Invitation préparée pour ${p.fullName}. Aucun e-mail n’est envoyé en démonstration.`);
+    return done(
+      account.existing
+        ? `${p.fullName} ajouté. Ce compte existait déjà : il peut utiliser « Mot de passe oublié ».`
+        : `Invitation envoyée à ${p.email}.`,
+    );
   } catch (e) {
+    if (pgCode(e) === "23505") return { ok: false, message: "Cette adresse est déjà utilisée.", errors: { email: "Adresse déjà utilisée." } };
     return fail(e);
   }
 }
@@ -192,30 +212,25 @@ export async function setUserStatus(payload: Record<string, string>): Promise<Ac
     const status = payload.status === "disabled" ? "disabled" : payload.status === "active" ? "active" : null;
     if (!status) return { ok: false, message: "Statut invalide." };
     if (payload.id === v.user.id) return { ok: false, message: "Vous ne pouvez pas modifier votre propre accès." };
-    const r = await mutateStore<ActionResult>((s) => {
-      const u = s.users.find((x) => x.id === payload.id && x.atieRole);
+    if (!isUuid(payload.id)) return { ok: false, message: "Utilisateur introuvable." };
+    const r = await withStaff<ActionResult>(async (q) => {
+      const u = await one<{ fullName: string; atieRole: string; status: string }>(
+        q,
+        `SELECT full_name AS "fullName", atie_role::text AS "atieRole", status FROM users WHERE id = $1 AND atie_role IS NOT NULL FOR UPDATE`,
+        [payload.id],
+      );
       if (!u) return { ok: false, message: "Utilisateur introuvable." };
-      if (status === "disabled" && u.atieRole === "super_admin" && s.users.filter((x) => x.atieRole === "super_admin" && x.status === "active").length <= 1) {
-        return { ok: false, message: "Au moins un super administrateur doit rester actif." };
+      if (status === "active" && u.status === "invited") return { ok: false, message: "Ce compte n’a pas encore accepté son invitation." };
+      if (status === "disabled" && u.atieRole === "super_admin") {
+        const left = await one<{ n: number }>(q, "SELECT count(*)::int AS n FROM users WHERE atie_role = 'super_admin' AND status = 'active' AND id <> $1", [payload.id]);
+        if (!left?.n) return { ok: false, message: "Au moins un super administrateur doit rester actif." };
       }
-      u.status = status;
-      audit(s, v.user.id, null, status === "disabled" ? "user.disable" : "user.enable", u.fullName, "");
+      await q.query("UPDATE users SET status = $2, updated_at = now() WHERE id = $1", [payload.id, status]);
+      await audit(q, v.user.id, null, status === "disabled" ? "user.disable" : "user.enable", u.fullName, "");
       return { ok: true, message: status === "disabled" ? `Accès de ${u.fullName} désactivé.` : `Accès de ${u.fullName} réactivé.` };
     });
     if (r.ok) revalidatePath("/admin", "layout");
     return r;
-  } catch (e) {
-    return fail(e);
-  }
-}
-
-export async function resetDemoData(_payload: Record<string, string>): Promise<ActionResult> {
-  try {
-    await assertPermission("demo.reset");
-    await mutateStore(() => undefined);
-    resetStore();
-    revalidatePath("/", "layout");
-    return { ok: true, message: "Données de démonstration réinitialisées." };
   } catch (e) {
     return fail(e);
   }

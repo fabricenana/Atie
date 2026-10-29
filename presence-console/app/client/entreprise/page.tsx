@@ -7,7 +7,7 @@ import { formatDate, formatRelative } from "@/lib/format";
 import { updateClientOrganization } from "@/lib/actions/client";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Card, CardBody, CardHeader, DefinitionList } from "@/components/ui/Card";
-import { Badge, OriginTag } from "@/components/ui/Badge";
+import { Badge } from "@/components/ui/Badge";
 import { Notice } from "@/components/ui/Notice";
 import { ActionForm, SubmitButton } from "@/components/ui/ActionForm";
 import { TextField, TextAreaField } from "@/components/ui/FormFields";
@@ -20,13 +20,12 @@ export default async function ClientOrganization() {
   const v = await requireClient();
   const org = v.organization;
   const canEdit = can(v.role, "client.org.write");
-  const domains = listDomainsForOrg(org.id);
-  const users = listOrgUsers(org.id);
+  const [domains, users] = await Promise.all([listDomainsForOrg(org.id), listOrgUsers(org.id)]);
   const prefs = org.notificationPrefs;
 
   return (
     <>
-      <PageHeader title="Mon entreprise" description="Coordonnées, facturation et préférences de votre compte ATIE Presence." meta={<OriginTag origin="demo" />} />
+      <PageHeader title="Mon entreprise" description="Coordonnées, facturation et préférences de votre compte ATIE Presence." />
 
       {!canEdit ? (
         <Notice kind="info" title="Lecture seule" className="mb-6">
@@ -63,7 +62,7 @@ export default async function ClientOrganization() {
                   <Checkbox name="quotaAlerts" label="Alertes de minutes" description="Lorsque le seuil d’alerte est atteint ou que les minutes sont épuisées." defaultChecked={prefs.quotaAlerts} />
                   <Checkbox name="newRequests" label="Nouvelles demandes des visiteurs" description="Un e-mail à chaque message, devis ou demande de contact." defaultChecked={prefs.newRequests} />
                   <Checkbox name="monthlyReport" label="Bilan mensuel" description="Un résumé de l’activité de votre réceptionniste en début de mois." defaultChecked={prefs.monthlyReport} />
-                  <p className="mt-1 text-[12.5px] text-faint">Démonstration : aucun e-mail n’est réellement envoyé.</p>
+                  <p className="mt-1 text-[12.5px] text-faint">L’envoi automatique de ces e-mails n’est pas encore activé : vos préférences sont enregistrées et s’appliqueront dès sa mise en service.</p>
                 </fieldset>
                 <div className="flex justify-end border-t border-line pt-5">
                   <SubmitButton>Enregistrer les modifications</SubmitButton>

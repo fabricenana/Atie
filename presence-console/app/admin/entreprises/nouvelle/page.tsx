@@ -53,9 +53,9 @@ export default async function NewOrganizationPage() {
           </div>
         </RedirectForm>
         <aside className="flex flex-col gap-4">
-          <Notice kind="demo" title="Création en démonstration">
-            L’entreprise est enregistrée uniquement dans les données locales de démonstration. Aucun compte n’est créé chez
-            LiveKit ou LemonSlice et aucun e-mail n’est envoyé.
+          <Notice kind="not_connected" title="Ce que fait la création">
+            L’entreprise est enregistrée dans la base de la console. Aucun compte n’est créé chez LiveKit ou LemonSlice et
+            le backend Python n’en est pas encore informé automatiquement. Les accès utilisateurs s’ajoutent ensuite par invitation.
           </Notice>
           <Notice kind="info" title="Étapes suivantes">
             Ajoutez les domaines autorisés, assignez une réceptionniste à partir d’un avatar existant, puis attribuez une formule.

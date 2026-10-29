@@ -15,7 +15,7 @@ import {
   listTopups,
   listUsage,
   getUser,
-  quotaForOrg,
+  listQuotas,
 } from "@/lib/repositories";
 import { parsePeriod, peakConcurrency, periodStart, sinceMs, startOfToday, usageSeries } from "@/lib/metrics";
 import { formatCHF, formatDateTime, formatNumber, formatRelative } from "@/lib/format";
@@ -24,7 +24,7 @@ import { Stat, StatGrid } from "@/components/ui/Stat";
 import { Card, CardBody, CardHeader } from "@/components/ui/Card";
 import { AreaChart, BarChart, Legend, Meter } from "@/components/ui/Charts";
 import { PeriodFilter } from "@/components/ui/PeriodFilter";
-import { Badge, OriginTag } from "@/components/ui/Badge";
+import { Badge } from "@/components/ui/Badge";
 import { Notice } from "@/components/ui/Notice";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ButtonLink } from "@/components/ui/Button";
@@ -35,32 +35,42 @@ export default async function AdminDashboard({ searchParams }: { searchParams: P
   const v = await requireAdmin();
   const sp = await searchParams;
   const period = parsePeriod(sp.period);
-  const orgs = listOrganizations();
-  const conv = listConversations();
+  const [orgs, conv, liveAll, usage, subs, plans, topups, allIncidents, provider, audit, receptionists, quotas] = await Promise.all([
+    listOrganizations(),
+    listConversations(),
+    listLiveSessions(),
+    listUsage(),
+    listSubscriptions(),
+    listPlans(),
+    listTopups(),
+    listIncidents(),
+    listProviderUsage(),
+    listAuditEvents(),
+    listReceptionists(),
+    listQuotas(),
+  ]);
   const today = startOfToday();
   const week = sinceMs(7);
   const month = sinceMs(30);
   const done = conv.filter((c) => c.status !== "active" && c.status !== "connecting");
-  const live = listLiveSessions().filter((c) => c.status !== "close_unconfirmed");
+  const live = liveAll.filter((c) => c.status !== "close_unconfirmed");
   const from = new Date(periodStart(period)).toISOString();
   const inPeriod = done.filter((c) => c.startedAt >= from);
   const minutes = inPeriod.reduce((n, c) => n + c.billableSeconds, 0) / 60;
-  const series = usageSeries(listUsage(), period);
-  const subs = listSubscriptions();
-  const plans = listPlans();
+  const series = usageSeries(usage, period);
   const mrr = subs
     .filter((s) => s.status === "active")
     .reduce((n, s) => n + (plans.find((p) => p.id === s.planId)?.monthlyPriceCents ?? 0), 0);
-  const topups = listTopups();
   const topupSold = topups.filter((t) => t.status === "applied").reduce((n, t) => n + t.priceCents, 0);
   const quotaAlerts = orgs
-    .map((o) => ({ o, q: quotaForOrg(o.id) }))
+    .flatMap((o) => { const q = quotas.get(o.id); return q ? [{ o, q }] : []; })
     .filter(({ q }) => q.alert !== "none")
     .sort((a, b) => b.q.pctUsed - a.q.pctUsed);
-  const incidents = listIncidents().filter((i) => i.status !== "resolved");
-  const provider = listProviderUsage();
+  const incidents = allIncidents.filter((i) => i.status !== "resolved");
   const pool = provider.find((p) => p.provider === "lemonslice");
-  const activity = listAuditEvents().slice(0, 7);
+  const activity = audit.slice(0, 7);
+  const actorIds = [...new Set(activity.map((a) => a.actorId).filter((x): x is string => Boolean(x)))];
+  const actors = new Map((await Promise.all(actorIds.map((id) => getUser(id)))).filter((u) => u !== null).map((u) => [u.id, u.fullName]));
   const byOrg = orgs
     .map((o) => ({ o, min: inPeriod.filter((c) => c.organizationId === o.id).reduce((n, c) => n + c.billableSeconds, 0) / 60 }))
     .filter((x) => x.min > 0)
@@ -93,7 +103,7 @@ export default async function AdminDashboard({ searchParams }: { searchParams: P
             </span>
           }
         />
-        <Stat label="Réceptionnistes déployées" icon={<Users />} value={listReceptionists().filter((r) => r.status === "live").length} hint={`${listReceptionists().length} configurées au total`} />
+        <Stat label="Réceptionnistes déployées" icon={<Users />} value={receptionists.filter((r) => r.status === "live").length} hint={`${receptionists.length} configurées au total`} />
         <Stat
           label="Sessions"
           icon={<Activity />}
@@ -118,13 +128,13 @@ export default async function AdminDashboard({ searchParams }: { searchParams: P
           label="Pool fournisseur (LemonSlice)"
           origin={null}
           value={pool?.minutesAvailable === null || !pool ? "—" : formatNumber(pool.minutesAvailable)}
-          hint="Aucune donnée réelle : fournisseur non connecté."
+          hint="Aucune donnée : consommation fournisseur non encore collectée par le backend."
         />
       </StatGrid>
 
       <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
         <Card>
-          <CardHeader title="Activité" description="Sessions et minutes facturables, toutes entreprises" actions={<OriginTag origin="demo" />} />
+          <CardHeader title="Activité" description="Sessions et minutes facturables, toutes entreprises (écrites par le backend Python)" />
           <CardBody>
             <Legend
               series={[
@@ -224,6 +234,9 @@ export default async function AdminDashboard({ searchParams }: { searchParams: P
         <Card>
           <CardHeader title="Dernières activités" description="Journal d’audit" actions={<ButtonLink href="/admin/parametres?section=audit" size="sm" variant="ghost">Tout voir</ButtonLink>} />
           <CardBody className="pt-3">
+            {activity.length === 0 ? (
+              <EmptyState title="Aucune activité enregistrée" />
+            ) : (
             <ol className="flex flex-col gap-3">
               {activity.map((a) => (
                 <li key={a.id} className="flex gap-3">
@@ -233,18 +246,19 @@ export default async function AdminDashboard({ searchParams }: { searchParams: P
                       <span className="font-medium">{a.target}</span> — {a.detail || a.action}
                     </p>
                     <p className="font-ui text-[12px] text-faint">
-                      {getUser(a.actorId)?.fullName ?? a.actorId} · {formatDateTime(a.at)}
+                      {(a.actorId && actors.get(a.actorId)) ?? "Système"} · {formatDateTime(a.at)}
                     </p>
                   </div>
                 </li>
               ))}
             </ol>
+            )}
           </CardBody>
         </Card>
       </div>
 
       <Card className="mt-6">
-        <CardHeader title="Sessions par jour" description="Nombre de sessions terminées" actions={<OriginTag origin="demo" />} />
+        <CardHeader title="Sessions par jour" description="Nombre de sessions terminées" />
         <CardBody>
           <BarChart width={1100} height={220} title="Sessions par période" labels={series.map((s) => s.label)} series={[{ label: "Sessions", values: series.map((s) => s.sessions), color: "accent" }]} />
         </CardBody>

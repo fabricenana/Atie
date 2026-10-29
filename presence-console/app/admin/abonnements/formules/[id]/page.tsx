@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { requireAdmin } from "@/lib/auth/session";
 import { can } from "@/lib/auth/permissions";
-import { getPlan, listOrganizations, listSubscriptions, quotaForOrg } from "@/lib/repositories";
+import { getPlan, listOrganizations, listQuotas, listSubscriptions } from "@/lib/repositories";
 import { formatDate, formatNumber } from "@/lib/format";
 import { PLAN_APPROVAL, SUBSCRIPTION_STATUS } from "@/lib/labels";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -17,11 +17,12 @@ export const metadata: Metadata = { title: "Formule" };
 export default async function PlanPage({ params }: { params: Promise<{ id: string }> }) {
   const v = await requireAdmin();
   const { id } = await params;
-  const plan = getPlan(id);
+  const plan = await getPlan(id);
   if (!plan) notFound();
   const readOnly = !can(v.role, "plan.write");
-  const orgs = new Map(listOrganizations().map((o) => [o.id, o.name]));
-  const subs = listSubscriptions().filter((s) => s.planId === plan.id);
+  const [orgList, allSubs, quotas] = await Promise.all([listOrganizations(), listSubscriptions(), listQuotas()]);
+  const orgs = new Map(orgList.map((o) => [o.id, o.name]));
+  const subs = allSubs.filter((s) => s.planId === plan.id);
   return (
     <>
       <PageHeader
@@ -53,7 +54,7 @@ export default async function PlanPage({ params }: { params: Promise<{ id: strin
             ) : (
               <ul className="flex flex-col divide-y divide-line">
                 {subs.map((s) => {
-                  const q = quotaForOrg(s.organizationId);
+                  const q = quotas.get(s.organizationId)!;
                   return (
                     <li key={s.id} className="flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-0">
                       <div className="min-w-0">

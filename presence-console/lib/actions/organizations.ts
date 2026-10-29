@@ -5,15 +5,23 @@ import { z } from "zod";
 import type { ActionResult } from "../action-result";
 import { fieldErrors } from "../action-result";
 import { assertPermission, ForbiddenError } from "../auth/session";
-import { mutateStore, newId } from "../demo/store";
-import { audit } from "./audit";
+import { inviteAccount } from "../auth/invite";
+import { audit, isUuid, one, pgCode, withStaff } from "../db";
+import { loadPlatformSettings } from "../settings";
 
 const slugRe = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const domainRe = /^(?=.{3,253}$)(?!-)[a-z0-9-]+(\.[a-z0-9-]+)+$/i;
+const uuid = z.string().refine(isUuid, "Identifiant invalide.");
 
 const orgSchema = z.object({
   name: z.string().trim().min(2, "Le nom doit contenir au moins 2 caractères.").max(120),
-  slug: z.string().trim().toLowerCase().regex(slugRe, "Minuscules, chiffres et tirets uniquement (ex. cabinet-lumiere)."),
+  slug: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .min(3, "3 caractères au moins.")
+    .max(64, "64 caractères au plus.")
+    .regex(slugRe, "Minuscules, chiffres et tirets uniquement (ex. cabinet-lumiere)."),
   sector: z.string().trim().min(2, "Indiquez le secteur.").max(120),
   contactName: z.string().trim().min(2, "Indiquez le responsable.").max(120),
   contactEmail: z.email("Adresse e-mail invalide."),
@@ -41,58 +49,32 @@ export async function createOrganization(_: ActionResult, fd: FormData): Promise
     const parsed = orgSchema.safeParse(read(fd, ORG_KEYS));
     if (!parsed.success) return { ok: false, message: "Vérifiez les champs signalés.", errors: fieldErrors(parsed.error.issues) };
     const d = parsed.data;
-    const result = await mutateStore((s) => {
-      if (s.organizations.some((o) => o.slug === d.slug)) return { dup: true as const };
-      const now = new Date().toISOString();
-      const id = newId("org");
-      s.organizations.push({
-        id,
-        slug: d.slug,
-        name: d.name,
-        sector: d.sector,
-        contactName: d.contactName,
-        contactEmail: d.contactEmail,
-        phone: d.phone,
-        address: d.address,
-        city: d.city,
-        country: "CH",
-        status: "onboarding",
-        activatedAt: null,
-        createdAt: now,
-        updatedAt: now,
-        billingEmail: d.billingEmail,
-        billingAddress: [d.address, d.city].filter(Boolean).join(", "),
-        vatNumber: d.vatNumber || null,
-        notificationPrefs: { quotaAlerts: true, newRequests: true, monthlyReport: true },
-        retentionDays: s.settings.defaultRetentionDays,
-        transcriptsEnabled: false,
-        demo: true,
-      });
-      s.widgetInstallations.push({
-        id: newId("wdg"),
-        organizationId: id,
-        receptionistId: null,
-        publicKey: `pk_demo_${d.slug}`,
-        position: "right",
-        accent: "#E31E24",
-        status: "not_configured",
-        platform: "generic",
-        lastSeenAt: null,
-        createdAt: now,
-      });
-      audit(s, v.user.id, id, "organization.create", d.name, "Création de l’entreprise");
-      return { id };
+    const id = await withStaff(async (q) => {
+      if (await one(q, "SELECT 1 FROM organizations WHERE slug = $1", [d.slug])) return null;
+      const settings = await loadPlatformSettings(q);
+      const org = await one<{ id: string }>(
+        q,
+        `INSERT INTO organizations (slug, name, sector, contact_name, contact_email, phone, address, city, billing_email, billing_address, vat_number, retention_days)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING id`,
+        [d.slug, d.name, d.sector, d.contactName, d.contactEmail, d.phone || null, d.address || null, d.city, d.billingEmail,
+          [d.address, d.city].filter(Boolean).join(", "), d.vatNumber || null, settings.defaultRetentionDays],
+      );
+      // Identifiant public du widget (non secret), inscrit dans le script d'intégration.
+      await q.query("INSERT INTO widget_installations (organization_id, public_key) VALUES ($1, $2)", [org!.id, `pk_${d.slug}`]);
+      await audit(q, v.user.id, org!.id, "organization.create", d.name, "Création de l’entreprise");
+      return org!.id;
     });
-    if ("dup" in result) return { ok: false, message: "Cet identifiant est déjà utilisé.", errors: { slug: "Identifiant déjà utilisé par une autre entreprise." } };
+    if (!id) return { ok: false, message: "Cet identifiant est déjà utilisé.", errors: { slug: "Identifiant déjà utilisé par une autre entreprise." } };
     revalidatePath("/admin/entreprises");
-    return { ok: true, message: `Entreprise « ${d.name} » créée (démo).`, id: result.id };
+    return { ok: true, message: `Entreprise « ${d.name} » créée.`, id };
   } catch (e) {
+    if (pgCode(e) === "23505") return { ok: false, message: "Cet identifiant est déjà utilisé.", errors: { slug: "Identifiant déjà utilisé." } };
     return fail(e);
   }
 }
 
 const updateSchema = orgSchema.omit({ slug: true }).extend({
-  id: z.string().min(1),
+  id: uuid,
   sector: z.string().trim().min(2, "Indiquez le secteur.").max(120),
   retentionDays: z.coerce.number().int().min(1, "Minimum 1 jour.").max(3650, "Maximum 3650 jours."),
 });
@@ -103,23 +85,16 @@ export async function updateOrganization(_: ActionResult, fd: FormData): Promise
     const parsed = updateSchema.safeParse(read(fd, [...ORG_KEYS.filter((k) => k !== "slug"), "id", "retentionDays"]));
     if (!parsed.success) return { ok: false, message: "Vérifiez les champs signalés.", errors: fieldErrors(parsed.error.issues) };
     const d = parsed.data;
-    const ok = await mutateStore((s) => {
-      const o = s.organizations.find((x) => x.id === d.id);
+    const ok = await withStaff(async (q) => {
+      const o = await one<{ name: string }>(
+        q,
+        `UPDATE organizations SET name = $2, sector = $3, contact_name = $4, contact_email = $5, phone = $6, address = $7, city = $8,
+                billing_email = $9, vat_number = $10, retention_days = $11, updated_at = now()
+          WHERE id = $1 RETURNING name`,
+        [d.id, d.name, d.sector, d.contactName, d.contactEmail, d.phone || null, d.address || null, d.city, d.billingEmail, d.vatNumber || null, d.retentionDays],
+      );
       if (!o) return false;
-      Object.assign(o, {
-        name: d.name,
-        sector: d.sector,
-        contactName: d.contactName,
-        contactEmail: d.contactEmail,
-        phone: d.phone,
-        address: d.address,
-        city: d.city,
-        billingEmail: d.billingEmail,
-        vatNumber: d.vatNumber || null,
-        retentionDays: d.retentionDays,
-        updatedAt: new Date().toISOString(),
-      });
-      audit(s, v.user.id, o.id, "organization.update", o.name, "Informations générales modifiées");
+      await audit(q, v.user.id, d.id, "organization.update", o.name, "Informations générales modifiées");
       return true;
     });
     if (!ok) return { ok: false, message: "Entreprise introuvable." };
@@ -134,34 +109,45 @@ export async function updateOrganization(_: ActionResult, fd: FormData): Promise
 export async function setOrganizationSuspended(payload: Record<string, string>): Promise<ActionResult> {
   try {
     const v = await assertPermission("org.suspend");
+    if (!isUuid(payload.id)) return { ok: false, message: "Entreprise introuvable." };
     const suspend = payload.suspend === "1";
-    const r = await mutateStore((s) => {
-      const o = s.organizations.find((x) => x.id === payload.id);
+    const name = await withStaff(async (q) => {
+      const o = await one<{ name: string; status: string; activatedAt: string | null }>(
+        q,
+        `SELECT name, status::text AS status, activated_at AS "activatedAt" FROM organizations WHERE id = $1 FOR UPDATE`,
+        [payload.id],
+      );
       if (!o) return null;
       if (suspend && o.status === "suspended") return o.name;
-      o.status = suspend ? "suspended" : o.activatedAt ? "active" : "onboarding";
-      o.updatedAt = new Date().toISOString();
-      for (const sub of s.subscriptions.filter((x) => x.organizationId === o.id && x.status !== "canceled")) {
-        sub.status = suspend ? "suspended" : "active";
-        sub.autoRenew = !suspend;
-      }
-      for (const r of s.receptionists.filter((x) => x.organizationId === o.id && (suspend ? x.status === "live" : x.status === "paused"))) {
-        r.status = suspend ? "paused" : "live";
-      }
-      audit(s, v.user.id, o.id, suspend ? "organization.suspend" : "organization.reactivate", o.name, suspend ? "Service suspendu" : "Service réactivé");
+      const status = suspend ? "suspended" : o.activatedAt ? "active" : "onboarding";
+      await q.query("UPDATE organizations SET status = $2::org_status, updated_at = now() WHERE id = $1", [payload.id, status]);
+      await q.query(
+        "UPDATE subscriptions SET status = $2::subscription_status, auto_renew = $3, updated_at = now() WHERE organization_id = $1 AND status <> 'canceled'",
+        [payload.id, suspend ? "suspended" : "active", !suspend],
+      );
+      await q.query(
+        "UPDATE receptionists SET status = $2::receptionist_status, updated_at = now() WHERE organization_id = $1 AND status = $3::receptionist_status",
+        [payload.id, suspend ? "paused" : "live", suspend ? "live" : "paused"],
+      );
+      await audit(q, v.user.id, payload.id, suspend ? "organization.suspend" : "organization.reactivate", o.name, suspend ? "Service suspendu" : "Service réactivé");
       return o.name;
     });
-    if (!r) return { ok: false, message: "Entreprise introuvable." };
+    if (!name) return { ok: false, message: "Entreprise introuvable." };
     revalidatePath(`/admin/entreprises/${payload.id}`);
     revalidatePath("/admin/entreprises");
-    return { ok: true, message: suspend ? `${r} : service suspendu (démo).` : `${r} : service réactivé (démo).` };
+    return {
+      ok: true,
+      message: suspend
+        ? `${name} : service suspendu dans la console. Le backend Python n’est pas encore informé automatiquement.`
+        : `${name} : service réactivé dans la console.`,
+    };
   } catch (e) {
     return fail(e);
   }
 }
 
 const domainSchema = z.object({
-  organizationId: z.string().min(1),
+  organizationId: uuid,
   domain: z
     .string()
     .trim()
@@ -176,12 +162,11 @@ export async function addDomain(_: ActionResult, fd: FormData): Promise<ActionRe
     const parsed = domainSchema.safeParse(read(fd, ["organizationId", "domain"]));
     if (!parsed.success) return { ok: false, message: "Domaine invalide.", errors: fieldErrors(parsed.error.issues) };
     const { organizationId, domain } = parsed.data;
-    const r = await mutateStore((s) => {
-      const o = s.organizations.find((x) => x.id === organizationId);
-      if (!o) return "missing";
-      if (s.websiteDomains.some((d) => d.domain === domain)) return "dup";
-      s.websiteDomains.push({ id: newId("dom"), organizationId, domain, verified: false, verifiedAt: null, createdAt: new Date().toISOString() });
-      audit(s, v.user.id, organizationId, "domain.add", domain, "Domaine autorisé ajouté");
+    const r = await withStaff(async (q) => {
+      if (!(await one(q, "SELECT 1 FROM organizations WHERE id = $1", [organizationId]))) return "missing";
+      if (await one(q, "SELECT 1 FROM website_domains WHERE domain = $1", [domain])) return "dup";
+      await q.query("INSERT INTO website_domains (organization_id, domain) VALUES ($1, $2)", [organizationId, domain]);
+      await audit(q, v.user.id, organizationId, "domain.add", domain, "Domaine autorisé ajouté");
       return "ok";
     });
     if (r === "missing") return { ok: false, message: "Entreprise introuvable." };
@@ -189,6 +174,7 @@ export async function addDomain(_: ActionResult, fd: FormData): Promise<ActionRe
     revalidatePath(`/admin/entreprises/${organizationId}`);
     return { ok: true, message: `Domaine ${domain} ajouté, en attente de vérification.` };
   } catch (e) {
+    if (pgCode(e) === "23505") return { ok: false, message: "Ce domaine est déjà enregistré.", errors: { domain: "Domaine déjà enregistré." } };
     return fail(e);
   }
 }
@@ -196,11 +182,14 @@ export async function addDomain(_: ActionResult, fd: FormData): Promise<ActionRe
 export async function removeDomain(payload: Record<string, string>): Promise<ActionResult> {
   try {
     const v = await assertPermission("org.write");
-    const r = await mutateStore((s) => {
-      const i = s.websiteDomains.findIndex((d) => d.id === payload.id && d.organizationId === payload.organizationId);
-      if (i < 0) return null;
-      const [d] = s.websiteDomains.splice(i, 1);
-      audit(s, v.user.id, d.organizationId, "domain.remove", d.domain, "Domaine retiré");
+    if (!isUuid(payload.id) || !isUuid(payload.organizationId)) return { ok: false, message: "Domaine introuvable." };
+    const r = await withStaff(async (q) => {
+      const d = await one<{ domain: string }>(q, "DELETE FROM website_domains WHERE id = $1 AND organization_id = $2 RETURNING domain::text AS domain", [
+        payload.id,
+        payload.organizationId,
+      ]);
+      if (!d) return null;
+      await audit(q, v.user.id, payload.organizationId, "domain.remove", d.domain, "Domaine retiré");
       return d.domain;
     });
     if (!r) return { ok: false, message: "Domaine introuvable." };
@@ -211,55 +200,74 @@ export async function removeDomain(payload: Record<string, string>): Promise<Act
   }
 }
 
-/** Vérification SIMULÉE : aucune requête DNS ni HTTP n'est effectuée. */
+/** Vérification MANUELLE : ATIE atteste avoir contrôlé le domaine (aucune requête DNS ni HTTP automatique). */
 export async function markDomainVerified(payload: Record<string, string>): Promise<ActionResult> {
   try {
     const v = await assertPermission("org.write");
-    const r = await mutateStore((s) => {
-      const d = s.websiteDomains.find((x) => x.id === payload.id && x.organizationId === payload.organizationId);
+    if (!isUuid(payload.id) || !isUuid(payload.organizationId)) return { ok: false, message: "Domaine introuvable." };
+    const r = await withStaff(async (q) => {
+      const d = await one<{ domain: string }>(
+        q,
+        "UPDATE website_domains SET verified = true, verified_at = now() WHERE id = $1 AND organization_id = $2 RETURNING domain::text AS domain",
+        [payload.id, payload.organizationId],
+      );
       if (!d) return null;
-      d.verified = true;
-      d.verifiedAt = new Date().toISOString();
-      audit(s, v.user.id, d.organizationId, "domain.verify_simulated", d.domain, "Vérification simulée (démo)");
+      await audit(q, v.user.id, payload.organizationId, "domain.verify_manual", d.domain, "Vérification manuelle par ATIE");
       return d.domain;
     });
     if (!r) return { ok: false, message: "Domaine introuvable." };
     revalidatePath(`/admin/entreprises/${payload.organizationId}`);
-    return { ok: true, simulated: true, message: `${r} marqué comme vérifié — simulation, aucun contrôle réel.` };
+    return { ok: true, message: `${r} marqué comme vérifié (contrôle manuel).` };
   } catch (e) {
     return fail(e);
   }
 }
 
 const inviteSchema = z.object({
-  organizationId: z.string().min(1),
+  organizationId: uuid,
   fullName: z.string().trim().min(2, "Indiquez le nom complet.").max(120),
-  email: z.email("Adresse e-mail invalide."),
+  email: z.email("Adresse e-mail invalide.").transform((x) => x.trim().toLowerCase()),
   role: z.enum(["org_admin", "org_viewer"], { message: "Choisissez un rôle." }),
 });
 
-/** Invitation SIMULÉE : aucun e-mail n'est envoyé. */
+/** Invitation d'un utilisateur client : compte Supabase (e-mail d'invitation) + atie.users + appartenance. */
 export async function inviteOrgUser(_: ActionResult, fd: FormData): Promise<ActionResult> {
   try {
     const v = await assertPermission("org.write");
     const parsed = inviteSchema.safeParse(read(fd, ["organizationId", "fullName", "email", "role"]));
     if (!parsed.success) return { ok: false, message: "Vérifiez les champs signalés.", errors: fieldErrors(parsed.error.issues) };
     const d = parsed.data;
-    const r = await mutateStore((s) => {
-      if (!s.organizations.some((o) => o.id === d.organizationId)) return "missing";
-      if (s.users.some((u) => u.email.toLowerCase() === d.email.toLowerCase())) return "dup";
-      const now = new Date().toISOString();
-      const uid = newId("usr");
-      s.users.push({ id: uid, email: d.email, fullName: d.fullName, atieRole: null, status: "invited", lastLoginAt: null, createdAt: now, demo: true });
-      s.organizationUsers.push({ id: newId("oru"), organizationId: d.organizationId, userId: uid, role: d.role, createdAt: now });
-      audit(s, v.user.id, d.organizationId, "user.invite_simulated", d.email, "Invitation simulée (aucun e-mail envoyé)");
+    const pre = await withStaff(async (q) => {
+      if (!(await one(q, "SELECT 1 FROM organizations WHERE id = $1", [d.organizationId]))) return "missing";
+      if (await one(q, "SELECT 1 FROM users WHERE email = $1", [d.email])) return "dup";
       return "ok";
     });
-    if (r === "missing") return { ok: false, message: "Entreprise introuvable." };
-    if (r === "dup") return { ok: false, message: "Cette adresse est déjà utilisée.", errors: { email: "Adresse déjà utilisée." } };
+    if (pre === "missing") return { ok: false, message: "Entreprise introuvable." };
+    if (pre === "dup") return { ok: false, message: "Cette adresse est déjà utilisée.", errors: { email: "Adresse déjà utilisée." } };
+    let account;
+    try {
+      account = await inviteAccount(d.email, d.fullName);
+    } catch {
+      return { ok: false, message: "Invitation impossible : le service d’authentification ne répond pas. Rien n’a été enregistré." };
+    }
+    await withStaff(async (q) => {
+      const u = await one<{ id: string }>(
+        q,
+        "INSERT INTO users (email, full_name, status, idp_subject) VALUES ($1, $2, 'invited', $3) RETURNING id",
+        [d.email, d.fullName, account.subject],
+      );
+      await q.query("INSERT INTO organization_users (organization_id, user_id, role) VALUES ($1, $2, $3::org_role)", [d.organizationId, u!.id, d.role]);
+      await audit(q, v.user.id, d.organizationId, "user.invite", d.email, account.existing ? "Compte d’authentification existant" : "Invitation envoyée par e-mail");
+    });
     revalidatePath(`/admin/entreprises/${d.organizationId}`);
-    return { ok: true, simulated: true, message: `Invitation enregistrée pour ${d.email} — aucun e-mail envoyé (démo).` };
+    return {
+      ok: true,
+      message: account.existing
+        ? `${d.email} ajouté. Ce compte existait déjà : l’utilisateur peut utiliser « Mot de passe oublié ».`
+        : `Invitation envoyée à ${d.email}.`,
+    };
   } catch (e) {
+    if (pgCode(e) === "23505") return { ok: false, message: "Cette adresse est déjà utilisée.", errors: { email: "Adresse déjà utilisée." } };
     return fail(e);
   }
 }
@@ -267,13 +275,20 @@ export async function inviteOrgUser(_: ActionResult, fd: FormData): Promise<Acti
 export async function removeOrgUser(payload: Record<string, string>): Promise<ActionResult> {
   try {
     const v = await assertPermission("org.write");
-    const r = await mutateStore((s) => {
-      const i = s.organizationUsers.findIndex((m) => m.id === payload.membershipId && m.organizationId === payload.organizationId);
-      if (i < 0) return null;
-      const [m] = s.organizationUsers.splice(i, 1);
-      const u = s.users.find((x) => x.id === m.userId);
-      if (u && !s.organizationUsers.some((x) => x.userId === u.id)) u.status = "disabled";
-      audit(s, v.user.id, m.organizationId, "user.remove", u?.email ?? m.userId, "Accès retiré");
+    if (!isUuid(payload.membershipId) || !isUuid(payload.organizationId)) return { ok: false, message: "Utilisateur introuvable." };
+    const r = await withStaff(async (q) => {
+      const m = await one<{ userId: string }>(q, `DELETE FROM organization_users WHERE id = $1 AND organization_id = $2 RETURNING user_id AS "userId"`, [
+        payload.membershipId,
+        payload.organizationId,
+      ]);
+      if (!m) return null;
+      const u = await one<{ email: string; fullName: string }>(q, `SELECT email::text AS email, full_name AS "fullName" FROM users WHERE id = $1`, [m.userId]);
+      // Plus aucune appartenance : le compte est désactivé (la connexion est refusée).
+      await q.query(
+        "UPDATE users SET status = 'disabled', updated_at = now() WHERE id = $1 AND atie_role IS NULL AND NOT EXISTS (SELECT 1 FROM organization_users WHERE user_id = $1)",
+        [m.userId],
+      );
+      await audit(q, v.user.id, payload.organizationId, "user.remove", u?.email ?? m.userId, "Accès retiré");
       return u?.fullName ?? "Utilisateur";
     });
     if (!r) return { ok: false, message: "Utilisateur introuvable." };

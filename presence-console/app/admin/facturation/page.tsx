@@ -26,7 +26,7 @@ export const metadata: Metadata = { title: "Facturation" };
 const TABS = ["factures", "paiements", "avoirs", "recharges", "parametres", "prestataire"] as const;
 type Tab = (typeof TABS)[number];
 
-const METHOD: Record<string, string> = { bank_transfer: "Virement", card: "Carte", manual: "Saisie manuelle (démo)" };
+const METHOD: Record<string, string> = { bank_transfer: "Virement", card: "Carte", manual: "Règlement constaté manuellement" };
 
 export default async function BillingPage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
   const v = await requireAdmin("billing.read");
@@ -34,15 +34,19 @@ export default async function BillingPage({ searchParams }: { searchParams: Prom
   const tab: Tab = (TABS as readonly string[]).includes(sp.tab ?? "") ? (sp.tab as Tab) : "factures";
   const canWrite = can(v.role, "billing.write");
 
-  const orgs = listOrganizations();
+  const [orgs, all, payments, settings, statuses, topups] = await Promise.all([
+    listOrganizations(),
+    listInvoices(),
+    listPayments(),
+    getBillingSettings(),
+    listProviderStatuses(),
+    listTopups(),
+  ]);
   const orgName = new Map(orgs.map((o) => [o.id, o.name]));
-  const all = listInvoices();
   const invoices = all.filter((i) => i.kind === "invoice");
   const credits = all.filter((i) => i.kind === "credit_note");
-  const payments = listPayments();
   const topupInvoices = invoices.filter((i) => i.lines.some((l) => l.label.toLowerCase().startsWith("recharge")));
-  const settings = getBillingSettings();
-  const provider = listProviderStatuses().find((p) => p.provider === "payment");
+  const provider = statuses.find((p) => p.provider === "payment");
   const invNumber = new Map(all.map((i) => [i.id, i.number]));
 
   const open = invoices.filter((i) => i.status === "open");
@@ -72,14 +76,14 @@ export default async function BillingPage({ searchParams }: { searchParams: Prom
               <ConfirmAction
                 action={markInvoicePaid}
                 payload={{ id: i.id }}
-                label="Marquer payée (démo)"
+                label="Marquer payée"
                 variant="ghost"
                 confirmVariant="primary"
                 confirmLabel="Marquer payée"
                 title={`Marquer ${i.number} comme payée ?`}
               >
                 <p className="text-[14px] text-muted">
-                  Enregistre un règlement manuel fictif de {formatCHF(i.totalCents)}. Aucun paiement réel n’est encaissé et aucun prestataire n’est contacté.
+                  Enregistre un règlement de {formatCHF(i.totalCents)} constaté manuellement (par exemple un virement reçu). Rien n’est encaissé par la console et aucun prestataire n’est contacté.
                 </p>
               </ConfirmAction>
             ) : (
@@ -111,8 +115,8 @@ export default async function BillingPage({ searchParams }: { searchParams: Prom
           </a>
         }
       />
-      <Notice kind="demo" title="Facturation de démonstration" className="mb-6">
-        Aucune facture officielle et aucun paiement réel : les numéros commencent par DEMO- et les documents n’ont pas de valeur comptable. Les paiements en ligne restent désactivés tant qu’aucun prestataire n’est autorisé.
+      <Notice kind="not_connected" title="Paiements non connectés" className="mb-6">
+        Aucun prestataire de paiement n’est connecté : la console n’encaisse rien et ne crée pas de facture automatiquement. Les règlements sont constatés manuellement.
       </Notice>
 
       <StatGrid className="mb-8">
@@ -196,7 +200,7 @@ export default async function BillingPage({ searchParams }: { searchParams: Prom
 
       {tab === "avoirs" ? (
         <div className="flex flex-col gap-4">
-          <Notice kind="info">Pour émettre un avoir, ouvrez la facture concernée et choisissez « Émettre un avoir (démo) ».</Notice>
+          <Notice kind="info">Pour émettre un avoir, ouvrez la facture concernée et choisissez « Émettre un avoir ».</Notice>
           <Card>
             <DataTable caption="Avoirs" emptyTitle="Aucun avoir" defaultSort={{ key: "issued", dir: "desc" }} columns={invoiceColumns.filter((c) => c.key !== "due" && c.key !== "actions")} rows={invoiceRows(credits)} />
           </Card>
@@ -212,8 +216,9 @@ export default async function BillingPage({ searchParams }: { searchParams: Prom
           <Card>
             <CardHeader title="Recharges en cours" description="À facturer après application" />
             <CardBody className="pt-3">
+              {topups.length === 0 ? <p className="text-[13.5px] text-muted">Aucune recharge.</p> : null}
               <ul className="flex flex-col divide-y divide-line">
-                {listTopups().map((t) => (
+                {topups.map((t) => (
                   <li key={t.id} className="flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-0">
                     <div className="min-w-0">
                       <p className="truncate text-[13.5px] font-medium">{orgName.get(t.organizationId)}</p>
@@ -235,7 +240,7 @@ export default async function BillingPage({ searchParams }: { searchParams: Prom
 
       {tab === "parametres" ? (
         <Card className="max-w-3xl">
-          <CardHeader title="Paramètres de facturation" description="Valeurs utilisées pour préparer les factures de démonstration." />
+          <CardHeader title="Paramètres de facturation" description="Valeurs utilisées pour préparer les factures et les avoirs." />
           <CardBody>
             {!canWrite ? (
               <Notice kind="info" className="mb-5">
@@ -251,7 +256,7 @@ export default async function BillingPage({ searchParams }: { searchParams: Prom
                 <TextField label="Délai de paiement (jours)" name="paymentTermsDays" type="number" min={0} max={120} required defaultValue={settings.paymentTermsDays} />
                 <TextField label="Taux de TVA (%)" name="vatRate" inputMode="decimal" required defaultValue={(settings.vatRatePermille / 10).toFixed(1)} hint="À confirmer avec la fiduciaire." />
                 <TextField label="Numéro de TVA ATIE" name="vatNumber" required defaultValue={settings.vatNumber} />
-                <TextField label="Préfixe des numéros" name="invoicePrefix" required defaultValue={settings.invoicePrefix} hint="Doit commencer par DEMO- en démonstration." />
+                <TextField label="Préfixe des numéros" name="invoicePrefix" required defaultValue={settings.invoicePrefix} hint="Majuscules, chiffres et tirets, 12 caractères au plus (ex. ATIE-)." />
                 <TextAreaField label="Mention de bas de page" name="footerNote" defaultValue={settings.footerNote} className="sm:col-span-2" />
               </fieldset>
               {canWrite ? (

@@ -15,8 +15,10 @@ export const metadata: Metadata = { title: "Knowledge Bases" };
 
 export default async function KnowledgeIndex() {
   await requireAdmin("knowledge.read_all");
-  const orgs = listOrganizations().map((org) => {
-    const sources = listKnowledgeForOrg(org.id);
+  const orgList = await listOrganizations();
+  const sourcesByOrg = await Promise.all(orgList.map((org) => listKnowledgeForOrg(org.id)));
+  const orgs = orgList.map((org, i) => {
+    const sources = sourcesByOrg[i];
     const statuses = new Map<IndexStatus, number>();
     for (const s of sources) statuses.set(s.indexStatus, (statuses.get(s.indexStatus) ?? 0) + 1);
     return {
@@ -40,8 +42,8 @@ export default async function KnowledgeIndex() {
           deux entreprises.
         </Notice>
         <NotConnected what="Indexation et recherche sémantique (RAG)">
-          Les documents sont enregistrés localement pour la démonstration. Aucun moteur d’indexation n’est branché : aucun statut « Indexé »
-          n’est simulé.
+          Les documents sont enregistrés en base. Aucun moteur d’indexation n’est branché : les sources restent « en attente d’indexation »,
+          aucun statut « Indexé » n’est affiché sans indexation réelle.
         </NotConnected>
       </div>
 

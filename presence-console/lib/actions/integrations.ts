@@ -5,12 +5,11 @@ import { z } from "zod";
 import type { ActionResult } from "../action-result";
 import { fieldErrors } from "../action-result";
 import { assertPermission, ForbiddenError } from "../auth/session";
-import { mutateStore, newId } from "../demo/store";
-import { audit } from "./audit";
+import { audit, isUuid, one, withStaff } from "../db";
 
 const widgetSchema = z.object({
-  orgId: z.string().min(1),
-  receptionistId: z.string(),
+  orgId: z.string().refine(isUuid, "Entreprise inconnue."),
+  receptionistId: z.string().refine((x) => x === "" || isUuid(x), "Réceptionniste invalide."),
   position: z.enum(["right", "left"], { message: "Choisissez une position." }),
   accent: z.string().trim().regex(/^#[0-9a-fA-F]{6}$/, "Couleur hexadécimale attendue, ex. #E31E24."),
   platform: z.enum(["generic", "wordpress"], { message: "Choisissez un mode d’installation." }),
@@ -28,60 +27,60 @@ export async function updateWidget(_: ActionResult, data: FormData): Promise<Act
     const parsed = widgetSchema.safeParse(Object.fromEntries(data));
     if (!parsed.success) return { ok: false, message: "Vérifiez les champs signalés.", errors: fieldErrors(parsed.error.issues) };
     const { orgId, receptionistId, position, accent, platform, status } = parsed.data;
-    const result = await mutateStore((s) => {
-      const org = s.organizations.find((o) => o.id === orgId);
-      if (!org) return "org";
+    const result = await withStaff(async (q) => {
+      const org = await one<{ name: string; slug: string }>(q, "SELECT name, slug FROM organizations WHERE id = $1", [orgId]);
+      if (!org) return "org" as const;
       // Isolation : la réceptionniste doit appartenir à la même entreprise.
-      if (receptionistId && !s.receptionists.some((r) => r.id === receptionistId && r.organizationId === orgId)) return "rcp";
-      if ((status === "ready" || status === "installed") && !receptionistId) return "need_rcp";
-      let w = s.widgetInstallations.find((x) => x.organizationId === orgId);
-      if (!w) {
-        w = {
-          id: newId("wdg"),
-          organizationId: orgId,
-          receptionistId: null,
-          publicKey: `pk_demo_${org.slug.replace(/[^a-z0-9]/g, "")}`,
-          position: "right",
-          accent: "#E31E24",
-          status: "not_configured",
-          platform: "generic",
-          lastSeenAt: null,
-          createdAt: new Date().toISOString(),
-        };
-        s.widgetInstallations.push(w);
+      if (receptionistId && !(await one(q, "SELECT 1 FROM receptionists WHERE id = $1 AND organization_id = $2", [receptionistId, orgId]))) return "rcp" as const;
+      if ((status === "ready" || status === "installed") && !receptionistId) return "need_rcp" as const;
+      const values = [orgId, receptionistId || null, position, accent.toUpperCase(), platform, status];
+      const updated = await one(
+        q,
+        `UPDATE widget_installations SET receptionist_id = $2, position = $3, accent = $4, platform = $5, status = $6
+          WHERE id = (SELECT id FROM widget_installations WHERE organization_id = $1 ORDER BY created_at LIMIT 1) RETURNING id`,
+        values,
+      );
+      if (!updated) {
+        await q.query(
+          `INSERT INTO widget_installations (organization_id, receptionist_id, position, accent, platform, status, public_key)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+          [...values, `pk_${org.slug}`],
+        );
       }
-      Object.assign(w, { receptionistId: receptionistId || null, position, accent: accent.toUpperCase(), platform, status });
-      audit(s, v.user.id, orgId, "widget.update", org.name, `Widget : ${status}, ${platform}, ${position} (démo, rien n’est publié)`);
-      return "ok";
+      await audit(q, v.user.id, orgId, "widget.update", org.name, `Widget : ${status}, ${platform}, ${position}`);
+      return "ok" as const;
     });
     if (result === "org") return { ok: false, message: "Entreprise introuvable." };
     if (result === "rcp") return { ok: false, message: "Réceptionniste invalide.", errors: { receptionistId: "Cette réceptionniste n’appartient pas à l’entreprise." } };
     if (result === "need_rcp") return { ok: false, message: "Réceptionniste requise.", errors: { receptionistId: "Assignez une réceptionniste avant de marquer le widget prêt ou installé." } };
     revalidatePath("/admin/integrations");
     revalidatePath(`/admin/integrations/${orgId}`);
-    return { ok: true, message: "Configuration enregistrée (démo). Aucun widget n’a été publié.", simulated: true };
+    return { ok: true, message: "Configuration du widget enregistrée. Rien n’est publié automatiquement sur le site du client." };
   } catch (e) {
     return fail(e);
   }
 }
 
-/** Contrôle de domaine SIMULÉ : aucune requête DNS ni HTTP n'est effectuée. */
-export async function simulateDomainCheck(payload: Record<string, string>): Promise<ActionResult> {
+/**
+ * Contrôle de domaine : la vérification automatique (DNS/HTTP) n'est pas encore branchée.
+ * L'action le dit explicitement et trace la demande ; aucune requête réseau n'est faite.
+ */
+export async function checkDomain(payload: Record<string, string>): Promise<ActionResult> {
   try {
     const v = await assertPermission("integration.write");
     const { orgId, domainId } = payload;
-    const domain = await mutateStore((s) => {
-      const d = s.websiteDomains.find((x) => x.id === domainId && x.organizationId === orgId);
+    if (!isUuid(orgId) || !isUuid(domainId)) return { ok: false, message: "Domaine introuvable pour cette entreprise." };
+    const domain = await withStaff(async (q) => {
+      const d = await one<{ domain: string }>(q, "SELECT domain::text AS domain FROM website_domains WHERE id = $1 AND organization_id = $2", [domainId, orgId]);
       if (!d) return null;
-      audit(s, v.user.id, orgId, "domain.check_simulated", d.domain, "Contrôle simulé, aucun appel réseau");
+      await audit(q, v.user.id, orgId, "domain.check_requested", d.domain, "Vérification automatique non connectée");
       return d.domain;
     });
     if (!domain) return { ok: false, message: "Domaine introuvable pour cette entreprise." };
     revalidatePath(`/admin/integrations/${orgId}`);
     return {
-      ok: true,
-      message: `Contrôle simulé pour ${domain} : aucune requête n’a été envoyée. La vérification réelle relèvera du backend.`,
-      simulated: true,
+      ok: false,
+      message: `Vérification automatique de ${domain} non disponible : contrôlez l’installation manuellement, puis marquez le domaine comme vérifié dans la fiche entreprise.`,
     };
   } catch (e) {
     return fail(e);

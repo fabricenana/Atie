@@ -34,15 +34,15 @@ export function StatusBadge({ status }: { status: { label: string; tone: Tone } 
   );
 }
 
-/** Marque une donnée de démonstration ou une estimation. Jamais présentée comme une mesure. */
-export function OriginTag({ origin }: { origin: "demo" | "estimated" | "measured" }) {
-  if (origin === "measured") return null;
+/** Marque une estimation : jamais présentée comme une mesure. Une mesure n'a pas de marque. */
+export function OriginTag({ origin }: { origin: "estimated" | "measured" | null | undefined }) {
+  if (origin !== "estimated") return null;
   return (
     <span
-      title={origin === "demo" ? "Donnée de démonstration, fictive" : "Estimation, pas une mesure fournisseur"}
+      title="Estimation, pas une mesure fournisseur"
       className="inline-flex h-5 items-center rounded-md border border-dashed border-line-strong px-1.5 font-ui text-[10.5px] font-medium uppercase tracking-[0.06em] text-faint"
     >
-      {origin === "demo" ? "Démo" : "Estimé"}
+      Estimé
     </span>
   );
 }

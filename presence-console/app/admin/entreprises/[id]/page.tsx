@@ -34,7 +34,8 @@ import { formatCHF, formatDate, formatDateTime, formatDuration, formatNumber, fo
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Tabs } from "@/components/ui/Tabs";
 import { Card, CardBody, CardHeader, DefinitionList } from "@/components/ui/Card";
-import { Badge, OriginTag, StatusBadge } from "@/components/ui/Badge";
+import { Badge, StatusBadge } from "@/components/ui/Badge";
+import type { Organization, WebsiteDomain } from "@/lib/domain/types";
 import { ButtonLink } from "@/components/ui/Button";
 import { ConfirmAction } from "@/components/ui/ConfirmAction";
 import { ActionForm, SubmitButton } from "@/components/ui/ActionForm";
@@ -65,18 +66,24 @@ export default async function OrganizationPage({ params, searchParams }: { param
   const v = await requireAdmin("org.read_all");
   const { id } = await params;
   const sp = await searchParams;
-  const org = getOrganization(id);
+  const org = await getOrganization(id);
   if (!org) notFound();
   const tab: TabKey = (TABS.find(([k]) => k === sp.tab)?.[0] ?? "general") as TabKey;
   const canWrite = can(v.role, "org.write");
   const canSuspend = can(v.role, "org.suspend");
 
-  const domains = listDomainsForOrg(org.id);
-  const rcp = getReceptionistForOrg(org.id);
-  const kb = listKnowledgeForOrg(org.id);
-  const conversations = listConversationsForOrg(org.id);
-  const users = listOrgUsers(org.id);
-  const history = listAuditEvents(org.id);
+  const [domains, rcp, kb, conversations, users, history, widget] = await Promise.all([
+    listDomainsForOrg(org.id),
+    getReceptionistForOrg(org.id),
+    listKnowledgeForOrg(org.id),
+    listConversationsForOrg(org.id),
+    listOrgUsers(org.id),
+    listAuditEvents(org.id),
+    getWidgetForOrg(org.id),
+  ]);
+  const avatar = rcp ? await getAvatar(rcp.avatarId) : null;
+  const actorIds = [...new Set(history.map((a) => a.actorId).filter((x): x is string => Boolean(x)))];
+  const actors = new Map((await Promise.all(actorIds.map((uid) => getUser(uid)))).filter((u) => u !== null).map((u) => [u.id, u.fullName]));
 
   const tabs = TABS.map(([key, label]) => ({
     key,
@@ -97,7 +104,6 @@ export default async function OrganizationPage({ params, searchParams }: { param
           <>
             <StatusBadge status={ORG_STATUS[org.status]} />
             <Badge>{org.slug}</Badge>
-            <OriginTag origin="demo" />
           </>
         }
         actions={
@@ -115,7 +121,7 @@ export default async function OrganizationPage({ params, searchParams }: { param
                 confirmLabel="Réactiver"
               >
                 <p className="text-[14px] text-muted">
-                  L’abonnement et la réceptionniste repassent en service dans la démonstration. Le backend Python reste l’autorité des quotas en production.
+                  L’abonnement et la réceptionniste repassent en service dans la console. Le backend Python reste l’autorité des quotas et n’en est pas encore informé automatiquement.
                 </p>
               </ConfirmAction>
             ) : (
@@ -145,8 +151,8 @@ export default async function OrganizationPage({ params, searchParams }: { param
 
       <Tabs tabs={tabs} current={tab} label="Sections du dossier" />
 
-      {tab === "general" && <GeneralTab orgId={org.id} canWrite={canWrite} />}
-      {tab === "domaines" && <DomainsTab orgId={org.id} canWrite={canWrite} />}
+      {tab === "general" && <GeneralTab org={org} canWrite={canWrite} />}
+      {tab === "domaines" && <DomainsTab orgId={org.id} domains={domains} canWrite={canWrite} />}
       {tab === "receptionniste" && (
         <Card>
           <CardHeader
@@ -156,7 +162,7 @@ export default async function OrganizationPage({ params, searchParams }: { param
           <CardBody>
             {rcp ? (
               <div className="flex flex-col gap-6 sm:flex-row">
-                <Portrait src={getAvatar(rcp.avatarId)?.portraitUrl ?? null} name={rcp.name} className="aspect-[3/4] w-full max-w-[180px] shrink-0 rounded-xl" />
+                <Portrait src={avatar?.portraitUrl ?? null} name={rcp.name} className="aspect-[3/4] w-full max-w-[180px] shrink-0 rounded-xl" />
                 <div className="min-w-0 flex-1">
                   <div className="mb-4 flex flex-wrap items-center gap-2">
                     <h3 className="text-[20px] font-semibold">{rcp.name}</h3>
@@ -166,9 +172,9 @@ export default async function OrganizationPage({ params, searchParams }: { param
                     items={[
                       ["Rôle", rcp.role],
                       ["Langues", [rcp.primaryLang, ...rcp.secondaryLangs].map((l) => LANG_SHORT[l]).join(" · ")],
-                      ["Avatar LemonSlice", <code key="a" className="font-ui text-[12.5px]">{getAvatar(rcp.avatarId)?.providerAvatarId}</code>],
+                      ["Avatar LemonSlice", <code key="a" className="font-ui text-[12.5px]">{avatar?.providerAvatarId ?? "—"}</code>],
                       ["Durée maximale", `${formatDuration(rcp.maxConversationSeconds)} min`],
-                      ["Widget", <StatusBadge key="w" status={WIDGET_STATUS[getWidgetForOrg(org.id)?.status ?? "not_configured"]} />],
+                      ["Widget", <StatusBadge key="w" status={WIDGET_STATUS[widget?.status ?? "not_configured"]} />],
                       ["Dernière activité", formatRelative(rcp.lastActivityAt)],
                     ]}
                   />
@@ -212,7 +218,7 @@ export default async function OrganizationPage({ params, searchParams }: { param
       {tab === "abonnement" && <SubscriptionTab orgId={org.id} />}
       {tab === "sessions" && (
         <Card>
-          <CardHeader title="Sessions et conversations" description="Aucune transcription n’est conservée par défaut." actions={<OriginTag origin="demo" />} />
+          <CardHeader title="Sessions et conversations" description="Écrites par le backend Python. Aucune transcription n’est conservée par défaut." />
           <DataTable
             caption={`Sessions de ${org.name}`}
             columns={[
@@ -241,7 +247,7 @@ export default async function OrganizationPage({ params, searchParams }: { param
             filters={[{ key: "status", label: "Statut", options: Object.entries(SESSION_STATUS).map(([value, s]) => ({ value, label: s.label })) }]}
             defaultSort={{ key: "date", dir: "desc" }}
             emptyTitle="Aucune session"
-            emptyDescription="Cette entreprise n’a encore reçu aucune conversation."
+            emptyDescription="Aucune conversation enregistrée pour cette entreprise : le backend Python n’a encore rien transmis."
           />
         </Card>
       )}
@@ -284,7 +290,7 @@ export default async function OrganizationPage({ params, searchParams }: { param
           </Card>
           {canWrite ? (
             <Card>
-              <CardHeader title="Inviter un utilisateur" description="Invitation simulée : aucun e-mail n’est envoyé." />
+              <CardHeader title="Inviter un utilisateur" description="Un e-mail d’invitation est envoyé pour définir le mot de passe." />
               <CardBody>
                 <ActionForm action={inviteOrgUser} resetOnSuccess className="flex flex-col gap-4">
                   <input type="hidden" name="organizationId" value={org.id} />
@@ -300,7 +306,7 @@ export default async function OrganizationPage({ params, searchParams }: { param
                     ]}
                   />
                   <SubmitButton className="self-start">
-                    <UserPlus aria-hidden /> Inviter (démo)
+                    <UserPlus aria-hidden /> Inviter
                   </SubmitButton>
                 </ActionForm>
               </CardBody>
@@ -323,7 +329,7 @@ export default async function OrganizationPage({ params, searchParams }: { param
                       <span className="font-medium">{a.target}</span> — {a.detail || a.action}
                     </p>
                     <p className="font-ui text-[12px] text-faint">
-                      <code>{a.action}</code> · {getUser(a.actorId)?.fullName ?? a.actorId} · {formatDateTime(a.at)}
+                      <code>{a.action}</code> · {(a.actorId && actors.get(a.actorId)) ?? "Système"} · {formatDateTime(a.at)}
                     </p>
                   </li>
                 ))}
@@ -336,8 +342,7 @@ export default async function OrganizationPage({ params, searchParams }: { param
   );
 }
 
-function GeneralTab({ orgId, canWrite }: { orgId: string; canWrite: boolean }) {
-  const org = getOrganization(orgId)!;
+function GeneralTab({ org, canWrite }: { org: Organization; canWrite: boolean }) {
   return (
     <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
       <Card>
@@ -391,8 +396,7 @@ function GeneralTab({ orgId, canWrite }: { orgId: string; canWrite: boolean }) {
   );
 }
 
-function DomainsTab({ orgId, canWrite }: { orgId: string; canWrite: boolean }) {
-  const domains = listDomainsForOrg(orgId);
+function DomainsTab({ orgId, domains, canWrite }: { orgId: string; domains: WebsiteDomain[]; canWrite: boolean }) {
   return (
     <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
       <Card>
@@ -417,11 +421,11 @@ function DomainsTab({ orgId, canWrite }: { orgId: string; canWrite: boolean }) {
                       icon={<CheckCircle2 aria-hidden />}
                       variant="ghost"
                       confirmVariant="primary"
-                      title="Vérification simulée"
+                      title="Vérification manuelle"
                       confirmLabel="Marquer comme vérifié"
                     >
                       <p className="text-[14px] text-muted">
-                        Aucune vérification DNS ou HTTP n’est effectuée dans cette démonstration. Le domaine sera seulement marqué comme vérifié dans les données locales.
+                        Aucune vérification DNS ou HTTP automatique n’est effectuée. Confirmez seulement si vous avez contrôlé vous-même que ce domaine appartient bien à l’entreprise.
                       </p>
                     </ConfirmAction>
                   ) : null}
@@ -465,10 +469,8 @@ function DomainsTab({ orgId, canWrite }: { orgId: string; canWrite: boolean }) {
   );
 }
 
-function SubscriptionTab({ orgId }: { orgId: string }) {
-  const q = quotaForOrg(orgId);
-  const topups = listTopupsForOrg(orgId);
-  const conc = listConcurrencyForOrg(orgId);
+async function SubscriptionTab({ orgId }: { orgId: string }) {
+  const [q, topups, conc] = await Promise.all([quotaForOrg(orgId), listTopupsForOrg(orgId), listConcurrencyForOrg(orgId)]);
   const total = q.includedMinutes + q.topupMinutes;
   if (!q.subscription || !q.plan) {
     return (

@@ -11,7 +11,7 @@ import {
   listProviderUsage,
   listSubscriptions,
   listTopups,
-  quotaForOrg,
+  listQuotas,
 } from "@/lib/repositories";
 import { activateConcurrency, assignPlan, createTopup, decideTopup } from "@/lib/actions/plans";
 import { formatCHF, formatDate, formatNumber } from "@/lib/format";
@@ -42,18 +42,28 @@ export default async function SubscriptionsPage({ searchParams }: { searchParams
   const canPlan = can(v.role, "plan.write");
   const canSub = can(v.role, "subscription.write");
 
-  const plans = listPlans();
-  const subs = listSubscriptions();
-  const orgs = listOrganizations();
+  const [plans, subs, orgs, topupList, concurrency, providers] = await Promise.all([
+    listPlans(),
+    listSubscriptions(),
+    listOrganizations(),
+    listTopups(),
+    listConcurrency(),
+    listProviderUsage(),
+  ]);
   const orgName = new Map(orgs.map((o) => [o.id, o.name]));
-  const topups = [...listTopups()].sort((a, b) => b.requestedAt.localeCompare(a.requestedAt));
-  const concurrency = listConcurrency();
+  const topups = [...topupList].sort((a, b) => b.requestedAt.localeCompare(a.requestedAt));
   const pendingTopups = topups.filter((t) => t.status === "pending" || t.status === "requested").length;
 
-  const quotas = subs.filter((s) => s.status !== "canceled").map((s) => quotaForOrg(s.organizationId));
+  // Quotas des entreprises concernées (abonnements et options de concurrence), préchargés.
+  const quotaByOrg = await listQuotas();
+  const quotaOf = (orgId: string) => quotaByOrg.get(orgId)!;
+  const quotas = subs.filter((s) => s.status !== "canceled").map((s) => quotaOf(s.organizationId));
   const commercialIncluded = quotas.reduce((n, q) => n + q.includedMinutes + q.topupMinutes, 0);
   const commercialUsed = quotas.reduce((n, q) => n + q.usedMinutes, 0);
-  const providers = listProviderUsage();
+
+  // Auteurs des demandes de recharge.
+  const requesterIds = [...new Set(topups.map((t) => t.requestedBy).filter((x): x is string => Boolean(x)))];
+  const requesters = new Map((await Promise.all(requesterIds.map((id) => getUser(id)))).filter((u) => u !== null).map((u) => [u.id, u.fullName]));
 
   const href = (t: Tab) => `/admin/abonnements?tab=${t}`;
 
@@ -61,7 +71,7 @@ export default async function SubscriptionsPage({ searchParams }: { searchParams
     <>
       <PageHeader
         title="Abonnements et tarification"
-        description="Formules, quotas de minutes, recharges et concurrence. Les modifications restent locales : aucune opération financière réelle."
+        description="Formules, quotas de minutes, recharges et concurrence. Aucun prestataire de paiement n’est connecté : aucune opération financière n’est déclenchée."
         breadcrumbs={[{ label: "Tableau de bord", href: "/admin" }, { label: "Abonnements" }]}
         actions={
           canPlan ? (
@@ -82,7 +92,6 @@ export default async function SubscriptionsPage({ searchParams }: { searchParams
               </span>
             }
             description="Minutes incluses dans les formules vendues et recharges appliquées, période en cours."
-            actions={<OriginTag origin="demo" />}
           />
           <CardBody>
             <div className="flex items-baseline justify-between gap-3">
@@ -92,7 +101,7 @@ export default async function SubscriptionsPage({ searchParams }: { searchParams
               <span className="font-ui text-[12.5px] text-muted">{quotas.length} abonnements</span>
             </div>
             <Meter className="mt-3" value={commercialUsed} max={commercialIncluded} label="Consommation commerciale totale" />
-            <p className="mt-3 text-[12.5px] text-muted">Valeur affichée à titre indicatif : le backend Python fait foi pour les quotas appliqués aux sessions.</p>
+            <p className="mt-3 text-[12.5px] text-muted">Minutes utilisées calculées à partir des conversations enregistrées par le backend Python (aucune tant qu’il n’écrit rien). Le backend fait foi pour les quotas appliqués aux sessions.</p>
           </CardBody>
         </Card>
         <Card>
@@ -105,15 +114,21 @@ export default async function SubscriptionsPage({ searchParams }: { searchParams
             description="LiveKit, LemonSlice et LiveKit Inference : coûts réels d’ATIE, distincts des quotas clients."
           />
           <CardBody className="flex flex-col gap-3">
-            <ul className="grid gap-2 sm:grid-cols-3">
-              {providers.map((p) => (
-                <li key={p.id} className="rounded-xl border border-dashed border-line-strong px-3 py-2.5">
-                  <p className="font-ui text-[12px] text-muted">{p.provider === "livekit" ? "LiveKit" : p.provider === "lemonslice" ? "LemonSlice" : "Inference"}</p>
-                  <p className="tabular mt-0.5 font-head text-[18px] font-semibold">{p.minutesUsed === null ? "—" : formatNumber(p.minutesUsed)}</p>
-                </li>
-              ))}
-            </ul>
-            <NotConnected what="Consommation fournisseurs">Aucune donnée réelle : les comptes fournisseurs ne sont pas connectés à la console.</NotConnected>
+            {providers.length ? (
+              <ul className="grid gap-2 sm:grid-cols-3">
+                {providers.map((p) => (
+                  <li key={p.id} className="rounded-xl border border-dashed border-line-strong px-3 py-2.5">
+                    <p className="flex items-center justify-between gap-2 font-ui text-[12px] text-muted">
+                      {p.provider === "livekit" ? "LiveKit" : p.provider === "lemonslice" ? "LemonSlice" : "Inference"}
+                      <OriginTag origin={p.origin} />
+                    </p>
+                    <p className="tabular mt-0.5 font-head text-[18px] font-semibold">{p.minutesUsed === null ? "—" : formatNumber(p.minutesUsed)}</p>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <NotConnected what="Consommation fournisseurs">Aucune donnée : la collecte auprès des fournisseurs n’est pas encore assurée par le backend.</NotConnected>
+            )}
           </CardBody>
         </Card>
       </div>
@@ -216,7 +231,7 @@ export default async function SubscriptionsPage({ searchParams }: { searchParams
                 { key: "actions", label: "Actions", align: "right" },
               ]}
               rows={subs.map((s): Row => {
-                const q = quotaForOrg(s.organizationId);
+                const q = quotaOf(s.organizationId);
                 const plan = plans.find((p) => p.id === s.planId);
                 const total = q.includedMinutes + q.topupMinutes;
                 const name = orgName.get(s.organizationId) ?? s.organizationId;
@@ -328,7 +343,7 @@ export default async function SubscriptionsPage({ searchParams }: { searchParams
                     price: formatCHF(t.priceCents),
                     status: <StatusBadge status={TOPUP_STATUS[t.status]} />,
                     requested: formatDate(t.requestedAt),
-                    by: getUser(t.requestedBy)?.fullName ?? "—",
+                    by: (t.requestedBy && requesters.get(t.requestedBy)) || "—",
                     actions:
                       open && canSub ? (
                         <div className="flex justify-end gap-1.5">
@@ -342,7 +357,7 @@ export default async function SubscriptionsPage({ searchParams }: { searchParams
                             title={`Appliquer ${t.minutes} min à ${name} ?`}
                           >
                             <p className="text-[14px] text-muted">
-                              Les minutes sont ajoutées au quota de la période en cours (démonstration). Aucun paiement n’est encaissé et aucune facture officielle n’est émise.
+                              Les minutes sont ajoutées au quota de la période en cours. Aucun paiement n’est encaissé et aucune facture n’est émise automatiquement.
                             </p>
                           </ConfirmAction>
                           <ConfirmAction action={decideTopup} payload={{ id: t.id, decision: "reject" }} label="Refuser" variant="ghost" confirmLabel="Refuser" title={`Refuser la recharge de ${name} ?`} />
@@ -361,8 +376,8 @@ export default async function SubscriptionsPage({ searchParams }: { searchParams
               {canSub ? (
                 <ActionForm action={createTopup} resetOnSuccess className="flex flex-col gap-5">
                   <SelectField label="Entreprise" name="organizationId" required options={[{ value: "", label: "Choisir…" }, ...orgs.map((o) => ({ value: o.id, label: o.name }))]} />
-                  <TextField label="Minutes" name="minutes" type="number" min={10} step={10} required defaultValue={50} />
-                  <TextField label="Prix (CHF)" name="price" inputMode="decimal" required defaultValue="15.00" hint="Prix de démonstration, non publié." />
+                  <TextField label="Minutes" name="minutes" type="number" min={10} step={10} required defaultValue={30} />
+                  <TextField label="Prix (CHF)" name="price" inputMode="decimal" required defaultValue="19.00" hint="Grille : CHF 19 pour 30 min. Aucun encaissement automatique." />
                   <SubmitButton>Préparer la recharge</SubmitButton>
                 </ActionForm>
               ) : (
@@ -395,7 +410,7 @@ export default async function SubscriptionsPage({ searchParams }: { searchParams
                 ]}
                 rows={concurrency.map((c): Row => {
                   const name = orgName.get(c.organizationId) ?? c.organizationId;
-                  const q = quotaForOrg(c.organizationId);
+                  const q = quotaOf(c.organizationId);
                   return {
                     id: c.id,
                     search: name,
@@ -418,7 +433,7 @@ export default async function SubscriptionsPage({ searchParams }: { searchParams
                             confirmLabel="Activer l’option"
                             title={`Activer +${c.extraSessions} conversation(s) simultanée(s) pour ${name} ?`}
                           >
-                            <p className="text-[14px] text-muted">Activation locale de démonstration, sans facturation ni modification du backend.</p>
+                            <p className="text-[14px] text-muted">Activation enregistrée dans la console, sans facturation automatique. Le backend Python n’est pas encore informé automatiquement.</p>
                           </ConfirmAction>
                         ) : (
                           <span className="font-ui text-[12px] text-faint">—</span>

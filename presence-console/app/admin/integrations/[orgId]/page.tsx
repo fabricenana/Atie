@@ -4,12 +4,12 @@ import { CheckCircle2, Globe, ShieldCheck, XCircle } from "lucide-react";
 import { requireAdmin } from "@/lib/auth/session";
 import { can } from "@/lib/auth/permissions";
 import { getAvatar, getOrganization, getWidgetForOrg, listDomainsForOrg, listProviderStatuses, listReceptionists } from "@/lib/repositories";
-import { simulateDomainCheck, updateWidget } from "@/lib/actions/integrations";
+import { checkDomain, updateWidget } from "@/lib/actions/integrations";
 import { CONNECTION_STATUS, WIDGET_STATUS } from "@/lib/labels";
 import { formatDate } from "@/lib/format";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Card, CardBody, CardHeader, DefinitionList } from "@/components/ui/Card";
-import { Badge, OriginTag, StatusBadge } from "@/components/ui/Badge";
+import { Badge, StatusBadge } from "@/components/ui/Badge";
 import { Notice, NotConnected } from "@/components/ui/Notice";
 import { ActionForm, SubmitButton } from "@/components/ui/ActionForm";
 import { SelectField, TextField } from "@/components/ui/FormFields";
@@ -22,7 +22,7 @@ type Params = { params: Promise<{ orgId: string }> };
 
 export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const { orgId } = await params;
-  return { title: `Intégration — ${getOrganization(orgId)?.name ?? "Entreprise"}` };
+  return { title: `Intégration — ${(await getOrganization(orgId))?.name ?? "Entreprise"}` };
 }
 
 const escapeAttr = (s: string) => s.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
@@ -30,14 +30,18 @@ const escapeAttr = (s: string) => s.replace(/&/g, "&amp;").replace(/"/g, "&quot;
 export default async function IntegrationDetail({ params }: Params) {
   const v = await requireAdmin("admin.access");
   const { orgId } = await params;
-  const org = getOrganization(orgId);
+  const org = await getOrganization(orgId);
   if (!org) notFound();
-  const widget = getWidgetForOrg(org.id);
-  const domains = listDomainsForOrg(org.id);
-  const receptionists = listReceptionists().filter((r) => r.organizationId === org.id);
+  const [widget, domains, allReceptionists, statuses] = await Promise.all([
+    getWidgetForOrg(org.id),
+    listDomainsForOrg(org.id),
+    listReceptionists(),
+    listProviderStatuses(),
+  ]);
+  const receptionists = allReceptionists.filter((r) => r.organizationId === org.id);
   const rcp = receptionists.find((r) => r.id === widget?.receptionistId) ?? null;
-  const avatar = rcp ? getAvatar(rcp.avatarId) : null;
-  const api = listProviderStatuses().find((p) => p.provider === "atie_api");
+  const avatar = rcp ? await getAvatar(rcp.avatarId) : null;
+  const api = statuses.find((p) => p.provider === "atie_api");
   const canWrite = can(v.role, "integration.write");
   const status = widget?.status ?? "not_configured";
   const position = widget?.position ?? "right";
@@ -94,18 +98,13 @@ add_filter( 'script_loader_tag', function ( $tag, $handle ) {
         title={`Intégration — ${org.name}`}
         description="Préparer l’installation du widget sur le site de l’entreprise."
         breadcrumbs={[{ label: "Intégrations", href: "/admin/integrations" }, { label: org.name }]}
-        meta={
-          <>
-            <StatusBadge status={WIDGET_STATUS[status]} />
-            <OriginTag origin="demo" />
-          </>
-        }
+        meta={<StatusBadge status={WIDGET_STATUS[status]} />}
         actions={<ButtonLink href={`/admin/entreprises/${org.id}?tab=domaines`}>Domaines de l’entreprise</ButtonLink>}
       />
 
-      <Notice kind="demo" title="Préparation uniquement" className="mb-6">
+      <Notice kind="info" title="Préparation uniquement" className="mb-6">
         Aucun widget n’est publié en production depuis cette page et aucune clé secrète n’apparaît dans le code d’intégration. Le statut
-        « Installé » est indicatif dans la démonstration.
+        « Installé » est déclaré par ATIE : il n’est pas encore confirmé automatiquement par le backend.
       </Notice>
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
@@ -191,18 +190,18 @@ add_filter( 'script_loader_tag', function ( $tag, $handle ) {
                       {d.verified ? <Badge tone="success">Vérifié</Badge> : <Badge>Non vérifié</Badge>}
                       {canWrite ? (
                         <ConfirmAction
-                          action={simulateDomainCheck}
+                          action={checkDomain}
                           payload={{ orgId: org.id, domainId: d.id }}
-                          label="Contrôler"
+                          label="Vérification"
                           variant="ghost"
                           confirmVariant="primary"
                           icon={<ShieldCheck aria-hidden />}
-                          title={`Contrôler ${d.domain}`}
-                          confirmLabel="Lancer le contrôle simulé"
+                          title={`Vérifier ${d.domain}`}
+                          confirmLabel="Demander la vérification"
                         >
                           <p className="text-[14px] text-muted">
-                            Contrôle simulé : aucune requête DNS ni HTTP n’est envoyée et le statut du domaine n’est pas modifié. La vérification réelle
-                            (enregistrement DNS ou fichier) relèvera du backend.
+                            La vérification automatique (enregistrement DNS ou fichier) n’est pas encore connectée : aucune requête n’est envoyée et le
+                            statut du domaine n’est pas modifié. Après un contrôle manuel, marquez le domaine comme vérifié dans la fiche entreprise.
                           </p>
                         </ConfirmAction>
                       ) : null}
@@ -226,7 +225,7 @@ add_filter( 'script_loader_tag', function ( $tag, $handle ) {
 
           {canWrite ? (
             <Card>
-              <CardHeader title="Configuration du widget" description="Enregistrée localement (démo)." />
+              <CardHeader title="Configuration du widget" description="Enregistrée dans la console ; rien n’est publié automatiquement." />
               <CardBody>
                 <ActionForm action={updateWidget} className="flex flex-col gap-4">
                   <input type="hidden" name="orgId" value={org.id} />

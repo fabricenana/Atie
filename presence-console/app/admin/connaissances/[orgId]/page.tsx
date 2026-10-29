@@ -8,22 +8,22 @@ import { formatDate } from "@/lib/format";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Card, CardBody, CardHeader } from "@/components/ui/Card";
 import { DataTable, type Row } from "@/components/ui/DataTable";
-import { Badge, OriginTag, StatusBadge } from "@/components/ui/Badge";
+import { Badge, StatusBadge } from "@/components/ui/Badge";
 import { Notice, NotConnected } from "@/components/ui/Notice";
 import { ButtonLink } from "@/components/ui/Button";
 import { KbAddForms } from "@/components/admin/kb-add-forms";
 
 export async function generateMetadata({ params }: { params: Promise<{ orgId: string }> }): Promise<Metadata> {
   const { orgId } = await params;
-  return { title: `Knowledge Base — ${getOrganization(orgId)?.name ?? "Entreprise"}` };
+  return { title: `Knowledge Base — ${(await getOrganization(orgId))?.name ?? "Entreprise"}` };
 }
 
 export default async function OrgKnowledge({ params }: { params: Promise<{ orgId: string }> }) {
   const v = await requireAdmin("knowledge.read_all");
   const { orgId } = await params;
-  const org = getOrganization(orgId);
+  const org = await getOrganization(orgId);
   if (!org) notFound();
-  const sources = listKnowledgeForOrg(org.id);
+  const sources = await listKnowledgeForOrg(org.id);
   const categories = [...new Set(sources.map((s) => s.category))].sort((a, b) => a.localeCompare(b, "fr"));
 
   const rows: Row[] = sources.map((s) => ({
@@ -49,7 +49,6 @@ export default async function OrgKnowledge({ params }: { params: Promise<{ orgId
         title={`Knowledge Base — ${org.name}`}
         description="Documents que la réceptionniste de cette entreprise pourra consulter."
         breadcrumbs={[{ label: "Knowledge Bases", href: "/admin/connaissances" }, { label: org.name }]}
-        meta={<OriginTag origin="demo" />}
         actions={<ButtonLink href={`/admin/entreprises/${org.id}`} variant="secondary">Fiche entreprise</ButtonLink>}
       />
 
@@ -58,7 +57,7 @@ export default async function OrgKnowledge({ params }: { params: Promise<{ orgId
           Ces documents ne sont visibles que dans cet espace. Chaque lecture et écriture vérifie l’appartenance à {org.name}.
         </Notice>
         <NotConnected what="Indexation, recherche sémantique et RAG">
-          Les ajouts sont enregistrés avec le statut « Démo — non indexé ». Les URL ne sont pas récupérées et le contenu des fichiers n’est ni
+          Les ajouts sont enregistrés avec le statut « En attente d’indexation ». Les URL ne sont pas récupérées et le contenu des fichiers n’est ni
           extrait ni stocké. Le schéma prévoit les versions et la source de chaque connaissance pour le futur pipeline d’indexation.
         </NotConnected>
       </div>

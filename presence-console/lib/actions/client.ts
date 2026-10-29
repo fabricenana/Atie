@@ -1,21 +1,21 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { TOPUP_OPTIONS } from "../repositories/client";
 import { z } from "zod";
+import { TOPUP_OPTIONS } from "../domain/pricing";
 import type { ActionResult } from "../action-result";
 import { fieldErrors } from "../action-result";
 import { assertPermission, ForbiddenError, type Viewer } from "../auth/session";
 import type { Permission } from "../auth/permissions";
-import { mutateStore, newId } from "../demo/store";
-import { audit } from "./audit";
+import { audit, isUuid, one, rows, withOrg } from "../db";
 
 /**
  * Actions de l'espace client.
  *
  * L'entreprise concernée provient TOUJOURS de la session serveur, jamais du formulaire.
- * Chaque objet modifié est recherché dans cette entreprise uniquement.
- * Aucune action n'a d'effet hors des données de démonstration locales.
+ * Chaque écriture passe par withOrg : rôle atie_app + RLS sur cette entreprise, audit
+ * dans la même transaction. Les demandes (recharge, changement de formule) n'entraînent
+ * aucun paiement : ATIE les traite depuis le back-office.
  */
 
 async function clientViewer(permission: Permission): Promise<Viewer & { organization: NonNullable<Viewer["organization"]> }> {
@@ -29,7 +29,8 @@ function fail(e: unknown): ActionResult {
   return { ok: false, message: "L’action n’a pas pu aboutir. Réessayez dans un instant." };
 }
 
-const now = () => new Date().toISOString();
+/** Notification interne pour l'équipe ATIE (organization_id NULL ; le client ne peut pas la relire). */
+const NOTIFY_ATIE = "INSERT INTO notifications (organization_id, level, title, body) VALUES (NULL, 'info', $1, $2)";
 
 // ---------------------------------------------------------------------------
 // Assistance et demandes de modification
@@ -47,14 +48,20 @@ export async function createSupportRequest(_prev: ActionResult, data: FormData):
     const parsed = supportSchema.safeParse({ kind: data.get("kind"), subject: data.get("subject"), message: data.get("message") });
     if (!parsed.success) return { ok: false, message: "Vérifiez les champs signalés.", errors: fieldErrors(parsed.error.issues) };
     const orgId = v.organization.id;
-    await mutateStore((s) => {
-      const t = now();
-      s.supportRequests.push({ id: newId("sup"), organizationId: orgId, ...parsed.data, status: "open", createdAt: t, updatedAt: t, createdBy: v.user.id });
-      s.notifications.push({ id: newId("ntf"), organizationId: null, level: "info", title: `Nouvelle demande : ${v.organization.name}`, body: parsed.data.subject, createdAt: t, readAt: null });
-      audit(s, v.user.id, orgId, "support.create", parsed.data.subject, parsed.data.kind);
+    const d = parsed.data;
+    await withOrg(orgId, async (q) => {
+      await q.query("INSERT INTO support_requests (organization_id, kind, subject, message, created_by) VALUES ($1, $2, $3, $4, $5)", [
+        orgId,
+        d.kind,
+        d.subject,
+        d.message,
+        v.user.id,
+      ]);
+      await q.query(NOTIFY_ATIE, [`Nouvelle demande : ${v.organization.name}`, d.subject]);
+      await audit(q, v.user.id, orgId, "support.create", d.subject, d.kind);
     });
     revalidatePath("/client", "layout");
-    return { ok: true, message: "Demande envoyée à l’équipe ATIE. Vous la retrouvez dans l’historique.", simulated: true };
+    return { ok: true, message: "Demande envoyée à l’équipe ATIE. Vous la retrouvez dans l’historique." };
   } catch (e) {
     return fail(e);
   }
@@ -65,7 +72,7 @@ export async function createSupportRequest(_prev: ActionResult, data: FormData):
 // ---------------------------------------------------------------------------
 
 const requestStatusSchema = z.object({
-  id: z.string().min(1),
+  id: z.string().refine(isUuid, "Demande introuvable."),
   status: z.enum(["new", "in_progress", "done", "archived"], { message: "Statut invalide." }),
 });
 
@@ -75,11 +82,14 @@ export async function updateVisitorRequestStatus(_prev: ActionResult, data: Form
     const parsed = requestStatusSchema.safeParse({ id: data.get("id"), status: data.get("status") });
     if (!parsed.success) return { ok: false, message: "Statut invalide.", errors: fieldErrors(parsed.error.issues) };
     const orgId = v.organization.id;
-    const found = await mutateStore((s) => {
-      const r = s.visitorRequests.find((x) => x.id === parsed.data.id && x.organizationId === orgId);
+    const found = await withOrg(orgId, async (q) => {
+      const r = await one<{ name: string }>(
+        q,
+        `UPDATE visitor_requests SET status = $3 WHERE id = $1 AND organization_id = $2 RETURNING visitor_name AS name`,
+        [parsed.data.id, orgId, parsed.data.status],
+      );
       if (!r) return false;
-      r.status = parsed.data.status;
-      audit(s, v.user.id, orgId, "visitor_request.status", r.visitorName, parsed.data.status);
+      await audit(q, v.user.id, orgId, "visitor_request.status", r.name, parsed.data.status);
       return true;
     });
     if (!found) return { ok: false, message: "Demande introuvable." };
@@ -99,19 +109,18 @@ export async function markNotificationRead(payload: Record<string, string>): Pro
     const v = await clientViewer("client.access");
     const orgId = v.organization.id;
     const all = payload.id === "all";
-    const count = await mutateStore((s) => {
-      let n = 0;
-      for (const x of s.notifications) {
-        if (x.organizationId !== orgId || x.readAt) continue;
-        if (all || x.id === payload.id) {
-          x.readAt = now();
-          n++;
-        }
-      }
-      return n;
-    });
+    if (!all && !isUuid(payload.id)) return { ok: false, message: "Aucune notification à mettre à jour." };
+    const updated = await withOrg(orgId, (q) =>
+      rows(
+        q,
+        "UPDATE notifications SET read_at = now() WHERE organization_id = $1 AND read_at IS NULL AND ($2::uuid IS NULL OR id = $2::uuid) RETURNING id",
+        [orgId, all ? null : payload.id],
+      ),
+    );
     revalidatePath("/client", "layout");
-    return count ? { ok: true, message: all ? "Toutes les notifications sont marquées comme lues." : "Notification marquée comme lue." } : { ok: false, message: "Aucune notification à mettre à jour." };
+    return updated.length
+      ? { ok: true, message: all ? "Toutes les notifications sont marquées comme lues." : "Notification marquée comme lue." }
+      : { ok: false, message: "Aucune notification à mettre à jour." };
   } catch (e) {
     return fail(e);
   }
@@ -121,8 +130,12 @@ export async function markNotificationRead(payload: Record<string, string>): Pro
 // Recharges et changement de formule (mode demande, aucun paiement)
 // ---------------------------------------------------------------------------
 
-
-const topupSchema = z.object({ minutes: z.enum(["50", "100"], { message: "Choisissez une recharge." }) });
+const topupSchema = z.object({
+  minutes: z.coerce
+    .number()
+    .int()
+    .refine((m) => TOPUP_OPTIONS.some((o) => o.minutes === m), "Choisissez une recharge."),
+});
 
 export async function requestTopup(_prev: ActionResult, data: FormData): Promise<ActionResult> {
   try {
@@ -130,23 +143,31 @@ export async function requestTopup(_prev: ActionResult, data: FormData): Promise
     const parsed = topupSchema.safeParse({ minutes: data.get("minutes") });
     if (!parsed.success) return { ok: false, message: "Choisissez une recharge.", errors: fieldErrors(parsed.error.issues) };
     const orgId = v.organization.id;
-    const minutes = Number(parsed.data.minutes);
-    await mutateStore((s) => {
-      const t = now();
-      s.minuteTopups.push({ id: newId("top"), organizationId: orgId, minutes, priceCents: TOPUP_OPTIONS.find((o) => o.minutes === minutes)!.priceCents, status: "requested", requestedAt: t, appliedAt: null, requestedBy: v.user.id });
-      s.notifications.push({ id: newId("ntf"), organizationId: null, level: "info", title: `Recharge demandée : ${v.organization.name}`, body: `${minutes} minutes`, createdAt: t, readAt: null });
-      s.notifications.push({ id: newId("ntf"), organizationId: orgId, level: "info", title: "Demande de recharge envoyée", body: `${minutes} minutes — ATIE confirmera l’ajout.`, createdAt: t, readAt: null });
-      audit(s, v.user.id, orgId, "topup.request", `${minutes} minutes`, "Demande client (démo)");
+    const option = TOPUP_OPTIONS.find((o) => o.minutes === parsed.data.minutes)!;
+    await withOrg(orgId, async (q) => {
+      await q.query("INSERT INTO minute_topups (organization_id, minutes, price_cents, status, requested_by) VALUES ($1, $2, $3, 'requested', $4)", [
+        orgId,
+        option.minutes,
+        option.priceCents,
+        v.user.id,
+      ]);
+      await q.query(NOTIFY_ATIE, [`Recharge demandée : ${v.organization.name}`, `${option.minutes} minutes`]);
+      await q.query("INSERT INTO notifications (organization_id, level, title, body) VALUES ($1, 'info', $2, $3)", [
+        orgId,
+        "Demande de recharge envoyée",
+        `${option.minutes} minutes — ATIE confirmera l’ajout.`,
+      ]);
+      await audit(q, v.user.id, orgId, "topup.request", `${option.minutes} minutes`, "Demande client");
     });
     revalidatePath("/client", "layout");
-    return { ok: true, message: `Demande de ${minutes} minutes envoyée. Aucun paiement n’a été effectué.`, simulated: true };
+    return { ok: true, message: `Demande de ${option.minutes} minutes envoyée. Aucun paiement n’a été effectué.` };
   } catch (e) {
     return fail(e);
   }
 }
 
 const planChangeSchema = z.object({
-  planId: z.string().min(1, "Choisissez une formule."),
+  planId: z.string().refine(isUuid, "Choisissez une formule."),
   message: z.string().trim().max(1000, "1000 caractères au maximum.").optional(),
 });
 
@@ -156,20 +177,22 @@ export async function requestPlanChange(_prev: ActionResult, data: FormData): Pr
     const parsed = planChangeSchema.safeParse({ planId: data.get("planId"), message: data.get("message") ?? undefined });
     if (!parsed.success) return { ok: false, message: "Vérifiez les champs signalés.", errors: fieldErrors(parsed.error.issues) };
     const orgId = v.organization.id;
-    const result = await mutateStore((s) => {
-      const plan = s.plans.find((p) => p.id === parsed.data.planId && p.active);
+    const result = await withOrg(orgId, async (q) => {
+      const plan = await one<{ name: string }>(q, "SELECT name FROM plans WHERE id = $1 AND active", [parsed.data.planId]);
       if (!plan) return null;
-      const t = now();
-      s.supportRequests.push({
-        id: newId("sup"), organizationId: orgId, kind: "contact", subject: `Changement de formule : ${plan.name}`,
-        message: parsed.data.message || `Nous souhaitons passer à la formule ${plan.name}.`, status: "open", createdAt: t, updatedAt: t, createdBy: v.user.id,
-      });
-      audit(s, v.user.id, orgId, "subscription.change_request", plan.name, "Demande client (démo)");
+      await q.query("INSERT INTO support_requests (organization_id, kind, subject, message, created_by) VALUES ($1, 'contact', $2, $3, $4)", [
+        orgId,
+        `Changement de formule : ${plan.name}`,
+        parsed.data.message || `Nous souhaitons passer à la formule ${plan.name}.`,
+        v.user.id,
+      ]);
+      await q.query(NOTIFY_ATIE, [`Changement de formule demandé : ${v.organization.name}`, plan.name]);
+      await audit(q, v.user.id, orgId, "subscription.change_request", plan.name, "Demande client");
       return plan.name;
     });
     if (!result) return { ok: false, message: "Formule indisponible.", errors: { planId: "Formule indisponible." } };
     revalidatePath("/client", "layout");
-    return { ok: true, message: `Demande de passage à ${result} envoyée. ATIE vous recontactera ; rien n’est facturé pour l’instant.`, simulated: true };
+    return { ok: true, message: `Demande de passage à ${result} envoyée. ATIE vous recontactera ; rien n’est facturé pour l’instant.` };
   } catch (e) {
     return fail(e);
   }
@@ -193,21 +216,30 @@ const orgSchema = z.object({
 export async function updateClientOrganization(_prev: ActionResult, data: FormData): Promise<ActionResult> {
   try {
     const v = await clientViewer("client.org.write");
-    const parsed = orgSchema.safeParse(Object.fromEntries(["contactName", "contactEmail", "phone", "address", "city", "billingEmail", "billingAddress", "vatNumber"].map((k) => [k, data.get(k) ?? undefined])));
+    const parsed = orgSchema.safeParse(
+      Object.fromEntries(["contactName", "contactEmail", "phone", "address", "city", "billingEmail", "billingAddress", "vatNumber"].map((k) => [k, data.get(k) ?? undefined])),
+    );
     if (!parsed.success) return { ok: false, message: "Vérifiez les champs signalés.", errors: fieldErrors(parsed.error.issues) };
     const orgId = v.organization.id;
-    await mutateStore((s) => {
-      const o = s.organizations.find((x) => x.id === orgId);
-      if (!o) return;
-      const { vatNumber, ...rest } = parsed.data;
-      Object.assign(o, rest, { vatNumber: vatNumber ? vatNumber : null, updatedAt: now() });
-      o.notificationPrefs = {
-        quotaAlerts: data.get("quotaAlerts") === "on",
-        newRequests: data.get("newRequests") === "on",
-        monthlyReport: data.get("monthlyReport") === "on",
-      };
-      audit(s, v.user.id, orgId, "organization.update", o.name, "Mise à jour par le client");
+    const d = parsed.data;
+    const prefs = {
+      quotaAlerts: data.get("quotaAlerts") === "on",
+      newRequests: data.get("newRequests") === "on",
+      monthlyReport: data.get("monthlyReport") === "on",
+    };
+    const ok = await withOrg(orgId, async (q) => {
+      const o = await one<{ name: string }>(
+        q,
+        `UPDATE organizations SET contact_name = $2, contact_email = $3, phone = $4, address = $5, city = $6, billing_email = $7,
+                billing_address = $8, vat_number = $9, notification_prefs = $10::jsonb, updated_at = now()
+          WHERE id = $1 RETURNING name`,
+        [orgId, d.contactName, d.contactEmail, d.phone, d.address, d.city, d.billingEmail, d.billingAddress, d.vatNumber || null, JSON.stringify(prefs)],
+      );
+      if (!o) return false;
+      await audit(q, v.user.id, orgId, "organization.update", o.name, "Mise à jour par le client");
+      return true;
     });
+    if (!ok) return { ok: false, message: "Entreprise introuvable." };
     revalidatePath("/client", "layout");
     return { ok: true, message: "Informations de l’entreprise enregistrées." };
   } catch (e) {

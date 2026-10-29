@@ -10,7 +10,6 @@ import { Card, CardBody, CardHeader } from "@/components/ui/Card";
 import { Stat, StatGrid } from "@/components/ui/Stat";
 import { BarChart, Meter } from "@/components/ui/Charts";
 import { PeriodFilter } from "@/components/ui/PeriodFilter";
-import { OriginTag } from "@/components/ui/Badge";
 import { Notice } from "@/components/ui/Notice";
 import { ButtonLink } from "@/components/ui/Button";
 
@@ -21,13 +20,12 @@ export default async function ClientUsage({ searchParams }: { searchParams: Prom
   const sp = await searchParams;
   const period = parsePeriod(sp.period);
   const org = v.organization;
-  const q = quotaForOrg(org.id);
+  const [q, usage, conversations] = await Promise.all([quotaForOrg(org.id), listUsageForOrg(org.id), listConversationsForOrg(org.id)]);
   const total = q.includedMinutes + q.topupMinutes;
-  const usage = listUsageForOrg(org.id);
   const series = usageSeries(usage, period);
   const monthly = usageSeries(usage, "12m");
   const from = new Date(periodStart(period)).toISOString();
-  const done = listConversationsForOrg(org.id).filter((c) => c.startedAt >= from && c.status !== "failed" && c.endedAt);
+  const done = conversations.filter((c) => c.startedAt >= from && c.status !== "failed" && c.endedAt);
   const avg = done.length ? done.reduce((n, c) => n + c.durationSeconds, 0) / done.length : 0;
   const periodMinutes = series.reduce((n, s) => n + s.minutes, 0);
   const periodSessions = series.reduce((n, s) => n + s.sessions, 0);
@@ -37,7 +35,7 @@ export default async function ClientUsage({ searchParams }: { searchParams: Prom
       <PageHeader
         title="Consommation"
         description="Les minutes de conversation de votre réceptionniste, mois par mois."
-        meta={<OriginTag origin="demo" />}
+       
         actions={<PeriodFilter current={period} basePath="/client/consommation" />}
       />
 
@@ -83,13 +81,13 @@ export default async function ClientUsage({ searchParams }: { searchParams: Prom
 
       <div className="mt-6 grid gap-6 xl:grid-cols-2">
         <Card>
-          <CardHeader title={period === "12m" ? "Historique mensuel" : "Historique quotidien"} description="Minutes de conversation" actions={<OriginTag origin="demo" />} />
+          <CardHeader title={period === "12m" ? "Historique mensuel" : "Historique quotidien"} description="Minutes de conversation" />
           <CardBody>
             <BarChart title="Minutes par période" unit="min" labels={series.map((s) => s.label)} series={[{ label: "Minutes", values: series.map((s) => s.minutes), color: "accent" }]} />
           </CardBody>
         </Card>
         <Card>
-          <CardHeader title="Douze derniers mois" description="Minutes et conversations par mois" actions={<OriginTag origin="demo" />} />
+          <CardHeader title="Douze derniers mois" description="Minutes et conversations par mois" />
           <CardBody>
             <BarChart
               title="Minutes et conversations par mois"
