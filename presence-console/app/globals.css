@@ -1,0 +1,188 @@
+@import "tailwindcss";
+
+/*
+ * Design system ATIE Presence Console
+ * Reprend l'identité du thème ATIE (atie-theme/assets/css) : rouge #E31E24,
+ * encre #141414, Archivo (titres) · Work Sans (texte) · Roboto (interface),
+ * vitrine sombre de la page Presence pour le mode sombre.
+ */
+
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+:root {
+  --red: #e31e24;
+  --red-strong: #c4181d;
+  --bg: #f4f4f5;
+  --surface: #ffffff;
+  --surface-2: #f8f8f9;
+  --surface-3: #efeff1;
+  --ink: #141414;
+  --muted: #5b616b;
+  --faint: #8a9099;
+  --line: rgba(20, 20, 20, 0.1);
+  --line-strong: rgba(20, 20, 20, 0.18);
+  --accent-soft: rgba(227, 30, 36, 0.08);
+  --accent-ink: #c4181d;
+  --success: #15803d;
+  --success-soft: rgba(21, 128, 61, 0.1);
+  --warning: #a16207;
+  --warning-soft: rgba(202, 138, 4, 0.13);
+  --danger: #b91c1c;
+  --danger-soft: rgba(185, 28, 28, 0.1);
+  --info: #1d4ed8;
+  --info-soft: rgba(29, 78, 216, 0.09);
+  --chart-1: #e31e24;
+  --chart-2: #141414;
+  --chart-grid: rgba(20, 20, 20, 0.07);
+  --shadow: 0 1px 2px rgba(20, 20, 20, 0.04), 0 4px 16px -8px rgba(20, 20, 20, 0.08);
+  --shadow-lg: 0 24px 64px -24px rgba(20, 20, 20, 0.28);
+  --sidebar: #ffffff;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e0e0f;
+    --surface: #161618;
+    --surface-2: #1b1b1e;
+    --surface-3: #232327;
+    --ink: #f4f4f5;
+    --muted: #a1a1aa;
+    --faint: #71717a;
+    --line: rgba(255, 255, 255, 0.08);
+    --line-strong: rgba(255, 255, 255, 0.16);
+    --accent-soft: rgba(227, 30, 36, 0.16);
+    --accent-ink: #ff6a6e;
+    --success: #4ade80;
+    --success-soft: rgba(74, 222, 128, 0.12);
+    --warning: #facc15;
+    --warning-soft: rgba(250, 204, 21, 0.12);
+    --danger: #f87171;
+    --danger-soft: rgba(248, 113, 113, 0.13);
+    --info: #7cb4ff;
+    --info-soft: rgba(124, 180, 255, 0.12);
+    --chart-2: #e4e4e7;
+    --chart-grid: rgba(255, 255, 255, 0.07);
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+    --shadow-lg: 0 24px 64px -24px rgba(0, 0, 0, 0.7);
+    --sidebar: #121214;
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg: #0e0e0f;
+  --surface: #161618;
+  --surface-2: #1b1b1e;
+  --surface-3: #232327;
+  --ink: #f4f4f5;
+  --muted: #a1a1aa;
+  --faint: #71717a;
+  --line: rgba(255, 255, 255, 0.08);
+  --line-strong: rgba(255, 255, 255, 0.16);
+  --accent-soft: rgba(227, 30, 36, 0.16);
+  --accent-ink: #ff6a6e;
+  --success: #4ade80;
+  --success-soft: rgba(74, 222, 128, 0.12);
+  --warning: #facc15;
+  --warning-soft: rgba(250, 204, 21, 0.12);
+  --danger: #f87171;
+  --danger-soft: rgba(248, 113, 113, 0.13);
+  --info: #7cb4ff;
+  --info-soft: rgba(124, 180, 255, 0.12);
+  --chart-2: #e4e4e7;
+  --chart-grid: rgba(255, 255, 255, 0.07);
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 24px 64px -24px rgba(0, 0, 0, 0.7);
+  --sidebar: #121214;
+  color-scheme: dark;
+}
+
+@theme inline {
+  --color-red: var(--red);
+  --color-red-strong: var(--red-strong);
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-faint: var(--faint);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-ink: var(--accent-ink);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-info: var(--info);
+  --color-info-soft: var(--info-soft);
+  --color-sidebar: var(--sidebar);
+  --font-head: "Archivo", ui-sans-serif, system-ui, sans-serif;
+  --font-body: "Work Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-ui: "Roboto", ui-sans-serif, system-ui, sans-serif;
+  --shadow-card: var(--shadow);
+  --shadow-pop: var(--shadow-lg);
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 14.5px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+h1, h2, h3, h4 {
+  font-family: var(--font-head);
+  letter-spacing: -0.015em;
+  line-height: 1.15;
+  margin: 0;
+}
+:focus-visible {
+  outline: 2px solid var(--red);
+  outline-offset: 2px;
+}
+::selection {
+  background: rgba(227, 30, 36, 0.2);
+}
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+@keyframes atie-fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes atie-pop {
+  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes atie-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+.animate-fade-in { animation: atie-fade-in 0.22s ease-out both; }
+.animate-pop { animation: atie-pop 0.2s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.animate-live { animation: atie-pulse 1.6s ease-in-out infinite; }
+
+dialog::backdrop {
+  background: rgba(10, 10, 11, 0.55);
+  backdrop-filter: blur(2px);
+}
