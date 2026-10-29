@@ -2,3 +2,4 @@ outils/tmp/
 dist/
 *.zip
 node_modules/
+.claude/
