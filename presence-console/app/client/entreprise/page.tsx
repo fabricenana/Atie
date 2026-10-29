@@ -34,7 +34,7 @@ export default async function ClientOrganization() {
         </Notice>
       ) : null}
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
         {canEdit ? (
           <Card>
             <CardHeader title="Informations de l’entreprise" description={`${org.name} · ${org.sector}`} />

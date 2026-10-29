@@ -100,7 +100,7 @@ add_filter( 'script_loader_tag', function ( $tag, $handle ) {
             <OriginTag origin="demo" />
           </>
         }
-        actions={<ButtonLink href={`/admin/entreprises/${org.id}?tab=sites`}>Domaines de l’entreprise</ButtonLink>}
+        actions={<ButtonLink href={`/admin/entreprises/${org.id}?tab=domaines`}>Domaines de l’entreprise</ButtonLink>}
       />
 
       <Notice kind="demo" title="Préparation uniquement" className="mb-6">
@@ -108,7 +108,7 @@ add_filter( 'script_loader_tag', function ( $tag, $handle ) {
         « Installé » est indicatif dans la démonstration.
       </Notice>
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
         <div className="flex min-w-0 flex-col gap-6">
           <Card>
             <CardHeader title="État de configuration" />

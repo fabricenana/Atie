@@ -130,7 +130,7 @@ export default async function SubscriptionsPage({ searchParams }: { searchParams
       />
 
       {tab === "formules" ? (
-        <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
           <div className="grid gap-4 sm:grid-cols-2">
             {plans.map((p) => (
               <Link
@@ -297,7 +297,7 @@ export default async function SubscriptionsPage({ searchParams }: { searchParams
       ) : null}
 
       {tab === "recharges" ? (
-        <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
+        <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
           <Card>
             <DataTable
               caption="Recharges de minutes"

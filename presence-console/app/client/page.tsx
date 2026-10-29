@@ -80,7 +80,7 @@ export default async function ClientDashboard({ searchParams }: { searchParams: 
         </Notice>
       ) : null}
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
         <Card className="overflow-hidden">
           <div className="grid sm:grid-cols-[200px_minmax(0,1fr)]">
             <Portrait src={avatar?.portraitUrl ?? null} name={rcp?.name ?? "Réceptionniste"} className="aspect-[4/3] sm:aspect-auto sm:min-h-full" sizes="(min-width: 640px) 200px, 100vw" />

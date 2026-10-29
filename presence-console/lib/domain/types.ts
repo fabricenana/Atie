@@ -462,4 +462,6 @@ export interface DemoStore {
   incidents: Incident[];
   providerStatuses: ProviderStatus[];
   settings: PlatformSettings;
+  /** Paramètres de facturation (optionnels : valeurs par défaut dans lib/repositories/billing.ts). */
+  billingSettings?: { [key: string]: unknown };
 }

@@ -76,7 +76,7 @@ export default async function MyReceptionist() {
         </Notice>
       ) : null}
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,320px)_minmax(0,1fr)]">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,320px)_minmax(0,1fr)]">
         <Card className="overflow-hidden">
           <Portrait src={avatar?.portraitUrl ?? null} name={rcp.name} className="aspect-[3/4] w-full" sizes="(min-width: 1024px) 320px, 100vw" />
           <CardBody>
@@ -158,7 +158,7 @@ export default async function MyReceptionist() {
 
       <Card className="mt-6">
         <CardHeader title="Aperçu du widget" description="Représentation de la bulle et du panneau sur votre site" />
-        <CardBody className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,280px)] lg:items-center">
+        <CardBody className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,280px)] lg:items-center">
           <WidgetPreview name={rcp.name} role={rcp.role} portraitUrl={avatar?.portraitUrl ?? null} greeting={rcp.greeting} langs={langs.map((l) => LANG_SHORT[l])} />
           <div className="flex flex-col gap-4">
             <Notice kind="demo" title="Aperçu statique">

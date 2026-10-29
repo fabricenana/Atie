@@ -58,7 +58,7 @@ export default async function KnowledgeSourcePage({ params }: Params) {
         actions={canWrite ? <KbDeleteButton orgId={org.id} sourceId={source.id} title={source.title} versions={versions.length} /> : null}
       />
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
         <div className="flex flex-col gap-6">
           <Card>
             <CardHeader title="Contenu actuel" description={`Version ${source.currentVersion}`} />

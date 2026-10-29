@@ -63,7 +63,7 @@ export default async function OrgKnowledge({ params }: { params: Promise<{ orgId
         </NotConnected>
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]">
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]">
         <Card>
           <CardHeader title="Sources" description={`${sources.length} source${sources.length > 1 ? "s" : ""}, ${categories.length} catégorie${categories.length > 1 ? "s" : ""}`} />
           <div className="mt-4">

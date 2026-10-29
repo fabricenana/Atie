@@ -37,7 +37,7 @@ export default async function ClientSubscription() {
         Les recharges et changements de formule sont envoyés à ATIE sous forme de demande. Aucun paiement n’est effectué depuis cet espace.
       </Notice>
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
         <Card>
           <CardHeader title="Formule actuelle" actions={q.subscription ? <StatusBadge status={SUBSCRIPTION_STATUS[q.subscription.status]} /> : undefined} />
           <CardBody>

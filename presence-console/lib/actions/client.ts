@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { TOPUP_OPTIONS } from "../repositories/client";
 import { z } from "zod";
 import type { ActionResult } from "../action-result";
 import { fieldErrors } from "../action-result";
@@ -120,8 +121,6 @@ export async function markNotificationRead(payload: Record<string, string>): Pro
 // Recharges et changement de formule (mode demande, aucun paiement)
 // ---------------------------------------------------------------------------
 
-/** Recharges proposées en démonstration : prix indicatifs, non approuvés. */
-const TOPUP_OPTIONS_SERVER = { "50": 1500, "100": 2900 } as const;
 
 const topupSchema = z.object({ minutes: z.enum(["50", "100"], { message: "Choisissez une recharge." }) });
 
@@ -134,7 +133,7 @@ export async function requestTopup(_prev: ActionResult, data: FormData): Promise
     const minutes = Number(parsed.data.minutes);
     await mutateStore((s) => {
       const t = now();
-      s.minuteTopups.push({ id: newId("top"), organizationId: orgId, minutes, priceCents: TOPUP_OPTIONS_SERVER[parsed.data.minutes], status: "requested", requestedAt: t, appliedAt: null, requestedBy: v.user.id });
+      s.minuteTopups.push({ id: newId("top"), organizationId: orgId, minutes, priceCents: TOPUP_OPTIONS.find((o) => o.minutes === minutes)!.priceCents, status: "requested", requestedAt: t, appliedAt: null, requestedBy: v.user.id });
       s.notifications.push({ id: newId("ntf"), organizationId: null, level: "info", title: `Recharge demandée : ${v.organization.name}`, body: `${minutes} minutes`, createdAt: t, readAt: null });
       s.notifications.push({ id: newId("ntf"), organizationId: orgId, level: "info", title: "Demande de recharge envoyée", body: `${minutes} minutes — ATIE confirmera l’ajout.`, createdAt: t, readAt: null });
       audit(s, v.user.id, orgId, "topup.request", `${minutes} minutes`, "Demande client (démo)");

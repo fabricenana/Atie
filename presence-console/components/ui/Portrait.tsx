@@ -5,7 +5,7 @@ import { cn } from "@/lib/cn";
 /** Portrait autorisé (visuels du site ATIE) — jamais de vidéo ni de session dans la console. */
 export function Portrait({ src, name, className, sizes = "160px" }: { src: string | null; name: string; className?: string; sizes?: string }) {
   return (
-    <div className={cn("relative overflow-hidden bg-surface-3", className)}>
+    <div className={cn(/\b(absolute|fixed)\b/.test(className ?? "") ? "" : "relative", "overflow-hidden bg-surface-3", className)}>
       {src ? (
         <Image src={src} alt={`Portrait de ${name}`} fill sizes={sizes} className="object-cover object-[50%_18%]" />
       ) : (

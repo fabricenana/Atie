@@ -48,7 +48,7 @@ export default async function ReceptionistPage({ params }: { params: Promise<{ i
         actions={org ? <ButtonLink href={`/admin/entreprises/${org.id}?tab=receptionniste`}>Dossier {org.name}</ButtonLink> : null}
       />
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
         <ActionForm action={updateReceptionist} className="flex min-w-0 flex-col gap-6">
           <input type="hidden" name="id" value={r.id} />
           <fieldset disabled={!canWrite} className="contents">

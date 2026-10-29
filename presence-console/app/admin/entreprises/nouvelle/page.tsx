@@ -21,7 +21,7 @@ export default async function NewOrganizationPage() {
         description="L’entreprise est créée en configuration. ATIE assigne ensuite la réceptionniste, les domaines et la formule."
         breadcrumbs={[{ label: "Entreprises", href: "/admin/entreprises" }, { label: "Nouvelle entreprise" }]}
       />
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
         <RedirectForm action={createOrganization} basePath="/admin/entreprises" className="flex flex-col gap-6">
           <Card>
             <CardHeader title="Identité" description="Informations visibles dans le back-office et l’espace client." />

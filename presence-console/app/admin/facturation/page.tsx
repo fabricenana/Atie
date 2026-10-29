@@ -204,7 +204,7 @@ export default async function BillingPage({ searchParams }: { searchParams: Prom
       ) : null}
 
       {tab === "recharges" ? (
-        <div className="grid gap-6 xl:grid-cols-2">
+        <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
           <Card>
             <CardHeader title="Recharges facturées" description="Factures de recharges de minutes" />
             <DataTable caption="Factures de recharges" emptyTitle="Aucune recharge facturée" columns={invoiceColumns.filter((c) => c.key !== "due")} rows={invoiceRows(topupInvoices)} />
@@ -265,7 +265,7 @@ export default async function BillingPage({ searchParams }: { searchParams: Prom
       ) : null}
 
       {tab === "prestataire" ? (
-        <div className="grid gap-6 lg:grid-cols-2">
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
           <Card>
             <CardHeader title="Prestataire de paiement" description="Encaissement des abonnements et recharges" actions={provider ? <StatusBadge status={CONNECTION_STATUS[provider.connection]} /> : null} />
             <CardBody className="flex flex-col gap-5">

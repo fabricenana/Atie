@@ -4,7 +4,7 @@ import { cn } from "@/lib/cn";
 /** Onglets en liens (état dans l'URL : partageable, navigable au clavier, sans JS). */
 export function Tabs({ tabs, current, label }: { tabs: Array<{ key: string; label: string; href: string; count?: number }>; current: string; label: string }) {
   return (
-    <nav aria-label={label} className="-mx-4 mb-6 overflow-x-auto px-4 sm:mx-0 sm:px-0">
+    <nav aria-label={label} className="relative -mx-4 mb-6 overflow-x-auto px-4 sm:mx-0 sm:px-0">
       <ul className="flex min-w-max gap-1 border-b border-line">
         {tabs.map((t) => {
           const active = t.key === current;

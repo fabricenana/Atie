@@ -39,7 +39,7 @@ export default async function PlanPage({ params }: { params: Promise<{ id: strin
           Ce tarif ne doit pas être publié tant qu’il n’est pas validé.
         </Notice>
       ) : null}
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
         <Card>
           <CardBody>
             <PlanForm plan={plan} readOnly={readOnly} />

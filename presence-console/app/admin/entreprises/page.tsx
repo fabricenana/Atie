@@ -21,10 +21,10 @@ export default async function OrganizationsPage() {
   const canWrite = can(v.role, "org.write");
 
   const columns: Column[] = [
-    { key: "name", label: "Entreprise", sortable: true },
-    { key: "sector", label: "Secteur", sortable: true, hideBelow: "lg" },
-    { key: "contact", label: "Responsable", sortable: true, hideBelow: "xl" },
-    { key: "domain", label: "Domaine", hideBelow: "xl" },
+    { key: "name", label: "Entreprise", sortable: true, className: "min-w-[190px]" },
+    { key: "sector", label: "Secteur", sortable: true, hideBelow: "xl" },
+    { key: "contact", label: "Responsable", sortable: true, hideBelow: "2xl" },
+    { key: "domain", label: "Domaine", hideBelow: "2xl" },
     { key: "receptionist", label: "Réceptionniste", sortable: true, hideBelow: "md" },
     { key: "plan", label: "Abonnement", sortable: true },
     { key: "minutes", label: "Minutes utilisées", sortable: true, align: "right" },

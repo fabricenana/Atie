@@ -13,7 +13,7 @@ export interface Column {
   sortable?: boolean;
   align?: "left" | "right";
   /** Masque la colonne sous ce point de rupture (le contenu reste dans la fiche détaillée). */
-  hideBelow?: "sm" | "md" | "lg" | "xl";
+  hideBelow?: "sm" | "md" | "lg" | "xl" | "2xl";
   className?: string;
 }
 
@@ -39,6 +39,7 @@ const hide: Record<NonNullable<Column["hideBelow"]>, string> = {
   md: "hidden md:table-cell",
   lg: "hidden lg:table-cell",
   xl: "hidden xl:table-cell",
+  "2xl": "hidden 2xl:table-cell",
 };
 
 /**

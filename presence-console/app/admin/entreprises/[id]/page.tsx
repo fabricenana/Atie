@@ -246,7 +246,7 @@ export default async function OrganizationPage({ params, searchParams }: { param
         </Card>
       )}
       {tab === "utilisateurs" && (
-        <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
+        <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
           <Card>
             <CardHeader title="Utilisateurs autorisés" description="Personnes ayant accès à l’espace client de cette entreprise." />
             <CardBody className="pt-3">
@@ -339,7 +339,7 @@ export default async function OrganizationPage({ params, searchParams }: { param
 function GeneralTab({ orgId, canWrite }: { orgId: string; canWrite: boolean }) {
   const org = getOrganization(orgId)!;
   return (
-    <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
+    <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
       <Card>
         <CardHeader title="Informations générales" description={canWrite ? "Modifiez les informations puis enregistrez." : "Lecture seule pour votre rôle."} />
         <CardBody>
@@ -394,7 +394,7 @@ function GeneralTab({ orgId, canWrite }: { orgId: string; canWrite: boolean }) {
 function DomainsTab({ orgId, canWrite }: { orgId: string; canWrite: boolean }) {
   const domains = listDomainsForOrg(orgId);
   return (
-    <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
+    <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
       <Card>
         <CardHeader title="Sites et domaines autorisés" description="Le widget ne s’ouvre que sur ces domaines (contrôle effectué par le backend)." />
         <CardBody className="pt-3">
@@ -494,7 +494,7 @@ function SubscriptionTab({ orgId }: { orgId: string }) {
         <Stat label="Minutes restantes" value={formatNumber(q.remainingMinutes)} hint={`${q.sessions} sessions sur la période`} />
         <Stat label="Conversations simultanées" origin={null} value={q.concurrent} hint={conc.length ? `${conc.length} option(s) de concurrence` : "Incluses dans la formule"} />
       </StatGrid>
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <Card>
           <CardHeader title="Période en cours" actions={<ButtonLink href="/admin/abonnements" size="sm">Modifier l’abonnement</ButtonLink>} />
           <CardBody>

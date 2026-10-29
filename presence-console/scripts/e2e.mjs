@@ -85,6 +85,14 @@ const ok = (cond, msg) => {
   if (!cond) fail(msg);
 };
 
+/** Requête depuis la page : le navigateur envoie le cookie de session (Secure accepté sur localhost). */
+async function fetchInPage(page, path) {
+  return page.evaluate(async (p) => {
+    const r = await fetch(p);
+    return { status: r.status, text: await r.text() };
+  }, path);
+}
+
 async function login(browser, uid, opts = {}) {
   const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, ...opts });
   const page = await ctx.newPage();
@@ -173,14 +181,15 @@ try {
     await page.goto(`${BASE}/client`);
     ok(page.url().endsWith("/admin"), `super admin redirigé hors de /client (${page.url()})`);
     // Export CSV autorisé
-    const csv = await page.request.get(`${BASE}/admin/facturation/export`);
-    ok(csv.status() === 200 && (await csv.text()).includes("DEMO-"), `export CSV (${csv.status()})`);
-    // 404 sur entité inconnue
-    const nf = await page.goto(`${BASE}/admin/entreprises/org_inexistante`);
-    ok(nf.status() === 404, `entreprise inconnue → ${nf.status()}`);
+    const csv = await fetchInPage(page, "/admin/facturation/export");
+    ok(csv.status === 200 && csv.text.includes("DEMO-"), `export CSV (${csv.status})`);
+    // Page « introuvable » sur entité inconnue. Le statut HTTP reste 200 : la réponse est déjà
+    // en streaming (loading.tsx) quand notFound() est levé — comportement documenté de Next.js.
+    await page.goto(`${BASE}/admin/entreprises/org_inexistante`);
+    ok((await page.locator("h1").innerText()).includes("introuvable"), "entreprise inconnue : page introuvable attendue");
     // Isolation KB : une source d'une autre entreprise n'est pas lisible via l'URL d'une autre
-    const kbx = await page.goto(`${BASE}/admin/connaissances/org_lumiere/kbs_5`);
-    ok(kbx.status() === 404, `source de Chalet via l'URL de Lumière → ${kbx.status()}`);
+    await page.goto(`${BASE}/admin/connaissances/org_lumiere/kbs_5`);
+    ok((await page.locator("h1").innerText()).includes("introuvable"), "source de Chalet lisible via l'URL de Lumière");
 
     // Parcours : recherche dans le tableau des entreprises
     await page.goto(`${BASE}/admin/entreprises`);
@@ -227,8 +236,8 @@ try {
       await page.goto(BASE + r);
       ok(page.url().endsWith("/client"), `client redirigé hors de ${r} (${page.url()})`);
     }
-    const csv = await page.request.get(`${BASE}/admin/facturation/export`);
-    ok(csv.status() === 403 || csv.status() === 401, `client → export CSV admin : ${csv.status()}`);
+    const csv = await fetchInPage(page, "/admin/facturation/export");
+    ok(csv.status === 403 || csv.status === 401, `client → export CSV admin : ${csv.status}`);
     await overflow(page, RESPONSIVE_CLIENT, "client");
     await ctx.close();
   }

@@ -28,7 +28,7 @@ export function IntegrationCode({ code, label }: { code: string; label: string }
           {done ? "Copié" : "Copier"}
         </Button>
       </div>
-      <pre className="overflow-x-auto px-4 py-3 font-mono text-[12.5px] leading-relaxed text-ink" tabIndex={0} aria-label={label}>
+      <pre className="relative overflow-x-auto px-4 py-3 font-mono text-[12.5px] leading-relaxed text-ink" tabIndex={0} aria-label={label}>
         <code>{code}</code>
       </pre>
     </div>
