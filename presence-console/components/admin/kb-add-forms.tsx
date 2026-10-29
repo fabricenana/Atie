@@ -107,7 +107,7 @@ export function KbAddForms({ orgId, categories, canWrite }: { orgId: string; cat
                   className="block w-full rounded-lg border border-line-strong bg-surface text-[13px] text-muted file:mr-3 file:h-10 file:cursor-pointer file:border-0 file:bg-surface-3 file:px-3 file:font-ui file:text-[13px] file:font-medium file:text-ink"
                 />
                 <FieldError name="file" />
-                <p className="text-[12.5px] text-faint">PDF ou DOCX, 15 Mo au plus. Démo : seuls le nom et la taille sont conservés.</p>
+                <p className="text-[12.5px] text-faint">PDF ou DOCX, 15 Mo au plus. Indexation du contenu à venir : seuls le nom et la taille sont enregistrés pour l’instant.</p>
               </div>
               {category}
             </div>

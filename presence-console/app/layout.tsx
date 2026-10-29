@@ -4,7 +4,7 @@ import { ToastProvider } from "@/components/ui/Toast";
 
 export const metadata: Metadata = {
   title: { default: "ATIE Presence Console", template: "%s · ATIE Presence" },
-  description: "Back-office ATIE et espace client ATIE Presence (démonstration).",
+  description: "Back-office ATIE et espace client ATIE Presence.",
   robots: { index: false, follow: false },
   icons: { icon: "/logo-atie.png" },
 };

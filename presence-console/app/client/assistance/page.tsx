@@ -64,7 +64,7 @@ export default async function ClientSupport({ searchParams }: { searchParams: Pr
 
       <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
         <Card id="formulaire" className="scroll-mt-24">
-          <CardHeader title={entry.title} description="Réponse habituelle sous un jour ouvrable (démonstration : aucun message n’est envoyé)." />
+          <CardHeader title={entry.title} description="Votre demande est transmise à l’équipe ATIE. Réponse habituelle sous un jour ouvrable." />
           <CardBody>
             {canCreate ? (
               <ActionForm key={entry.kind} action={createSupportRequest} resetOnSuccess className="flex flex-col gap-5">

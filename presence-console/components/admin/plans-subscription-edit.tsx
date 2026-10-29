@@ -9,7 +9,7 @@ import { Checkbox } from "@/components/ui/Field";
 import { SelectField, TextField } from "@/components/ui/FormFields";
 import { Modal } from "@/components/ui/Modal";
 
-/** Modification d'un abonnement (formule, seuil d'alerte, renouvellement) — démo locale. */
+/** Modification d'un abonnement (formule, seuil d'alerte, renouvellement) */
 export function SubscriptionEditButton({
   subscriptionId,
   orgName,
