@@ -10,13 +10,14 @@
 	--p-line: rgba(255, 255, 255, 0.08);
 	--p-text: #f4f4f5;
 	--p-muted: #a1a1aa;
-	--p-faint: #71717a;
+	--p-faint: #8b8b94;
 	background: var(--p-bg);
 	color: var(--p-text);
 }
 
 /* ---- Site header on the dark page ------------------------------------- */
-.atie-presence-dark .site-header { background: rgba(14, 14, 15, 0.86); backdrop-filter: blur(8px); border-bottom: 1px solid var(--p-line); box-shadow: none; }
+/* animation: none — the site's additional CSS animates the header to white on scroll, which would beat these colours. */
+.atie-presence-dark .site-header { animation: none; background: rgba(14, 14, 15, 0.86); backdrop-filter: blur(8px); border-bottom: 1px solid var(--p-line); box-shadow: none; }
 .atie-presence-dark .main-nav__list a { color: var(--p-text); }
 .atie-presence-dark .main-nav__list a:hover,
 .atie-presence-dark .main-nav__list .current-menu-item > a { color: var(--red); }
@@ -72,7 +73,7 @@
 /* ---- Featured receptionists ------------------------------------------- */
 .presence-featured { padding: clamp(28px, 5vh, 56px) 0; scroll-margin-top: 110px; }
 .presence-featured__head { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-bottom: 20px; }
-.presence-link { font-family: var(--font-ui); font-weight: 500; color: var(--p-text); text-decoration: none; }
+.presence-link { font-family: var(--font-ui); font-weight: 500; color: var(--p-text); text-decoration: none; white-space: nowrap; }
 .presence-link:hover { color: var(--red); }
 
 .presence-gallery { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
@@ -191,6 +192,7 @@
 @media (max-width: 1024px) {
 	.presence-gallery,
 	.presence-plans { grid-template-columns: repeat(2, 1fr); }
+	.presence-card--custom { aspect-ratio: auto; min-height: 260px; }
 }
 @media (max-width: 760px) {
 	.presence-actions,
@@ -204,7 +206,6 @@
 }
 @media (max-width: 560px) {
 	.presence-gallery { grid-template-columns: 1fr; }
-	.presence-card--custom { aspect-ratio: auto; min-height: 260px; }
 }
 @media (prefers-reduced-motion: reduce) {
 	.presence-card__media img, .presence-card__media video, .presence-action { transition: none; }
