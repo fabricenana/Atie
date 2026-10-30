@@ -90,5 +90,106 @@
 			sync('plan', 'data-summary-plan');
 			sync('receptionist', 'data-summary-persona');
 		});
+
+		// One step at a time. The browser's back button follows the steps through the URL hash.
+		var panels = form.querySelectorAll('[data-step]');
+		var last = panels.length;
+		var stepper = document.querySelector('[data-stepper]');
+		var back = form.querySelector('[data-step-back]');
+		var next = form.querySelector('[data-step-next]');
+		var submit = form.querySelector('[data-step-submit]');
+		var current = 0;
+
+		var valid = function (upTo) {
+			for (var i = 0; i < panels.length && i < upTo; i++) {
+				var fields = panels[i].querySelectorAll('input, textarea');
+				for (var j = 0; j < fields.length; j++) {
+					if (!fields[j].checkValidity()) {
+						if (current !== i + 1) {
+							show(i + 1, true);
+						}
+						fields[j].reportValidity();
+						return false;
+					}
+				}
+			}
+			return true;
+		};
+
+		var show = function (step, focus) {
+			current = step;
+			panels.forEach(function (panel) {
+				panel.hidden = +panel.getAttribute('data-step') !== step;
+			});
+			back.hidden = step === 1;
+			next.hidden = step === last;
+			submit.hidden = step !== last;
+			stepper.querySelectorAll('[data-stepper-item]').forEach(function (item) {
+				var number = +item.getAttribute('data-stepper-item');
+				item.classList.toggle('is-current', number === step);
+				item.classList.toggle('is-done', number < step);
+				if (number === step) {
+					item.setAttribute('aria-current', 'step');
+				} else {
+					item.removeAttribute('aria-current');
+				}
+			});
+			form.querySelectorAll('[data-review]').forEach(function (cell) {
+				var field = form.elements[cell.getAttribute('data-review')];
+				cell.textContent = field ? field.value : '';
+			});
+			if (focus) {
+				var title = form.querySelector('[data-step="' + step + '"] h2');
+				title.focus({ preventScroll: true });
+				window.scrollTo({ top: 0, behavior: reduced ? 'auto' : 'smooth' });
+			}
+		};
+
+		var go = function (step) {
+			if (step > current && !valid(step - 1)) {
+				return;
+			}
+			if (window.location.hash !== '#etape-' + step) {
+				window.location.hash = 'etape-' + step; // hashchange shows the step.
+			} else {
+				show(step, true);
+			}
+		};
+
+		form.noValidate = true; // Fields of hidden steps cannot show the browser's message: valid() does it.
+		document.documentElement.classList.add('presence-flow-on');
+		stepper.hidden = false;
+		var fromHash = /^#etape-([1-4])$/.exec(window.location.hash);
+		show(fromHash ? +fromHash[1] : +form.getAttribute('data-start'), false);
+
+		window.addEventListener('hashchange', function () {
+			var match = /^#etape-([1-4])$/.exec(window.location.hash);
+			show(match ? +match[1] : 1, true);
+		});
+		next.addEventListener('click', function () {
+			go(current + 1);
+		});
+		back.addEventListener('click', function () {
+			go(current - 1);
+		});
+		stepper.addEventListener('click', function (event) {
+			var target = event.target.closest('[data-step-goto]');
+			if (target) {
+				go(+target.getAttribute('data-step-goto'));
+			}
+		});
+		// Choosing a receptionist or a plan moves on by itself, like the buttons of a product page.
+		form.addEventListener('change', function (event) {
+			if (event.target.closest('.presence-pick__card, .presence-choice--plan')) {
+				window.setTimeout(function () {
+					go(current + 1);
+				}, 220);
+			}
+		});
+		form.addEventListener('submit', function (event) {
+			if (!valid(last)) {
+				event.preventDefault();
+			}
+		});
 	}
 })();
