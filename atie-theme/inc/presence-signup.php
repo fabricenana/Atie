@@ -225,6 +225,7 @@ add_action( 'admin_post_' . ATIE_SIGNUP_ACTION, 'atie_presence_signup_handle' );
 function atie_presence_signup_assets() {
 	if ( is_page_template( ATIE_SIGNUP_TEMPLATE ) ) {
 		wp_enqueue_style( 'atie-presence', ATIE_URI . '/assets/css/presence.css', array( 'atie-main' ), ATIE_VERSION );
+		wp_enqueue_script( 'atie-presence-page', ATIE_URI . '/assets/js/presence-page.js', array(), ATIE_VERSION, array( 'in_footer' => true ) );
 	}
 }
 add_action( 'wp_enqueue_scripts', 'atie_presence_signup_assets' );

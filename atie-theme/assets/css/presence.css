@@ -32,7 +32,6 @@
 }
 
 /* ---- Shared ------------------------------------------------------------ */
-.presence { padding-bottom: clamp(60px, 10vh, 120px); }
 .presence-wrap { width: 100%; max-width: 1240px; margin: 0 auto; padding: 0 clamp(20px, 4.5vw, 64px); }
 .presence-kicker {
 	display: inline-block; font-family: var(--font-ui); font-weight: 600; font-size: 12px;
@@ -232,6 +231,74 @@
 	.presence-bubble__label { display: none; }
 	.presence-bubble__face { width: 64px; height: 64px; }
 }
+
+/* ---- Receptionist preview dialog -------------------------------------- */
+html:has(.presence-preview[open]) { overflow: hidden; }
+.presence-preview {
+	width: min(960px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); padding: 0; overflow: auto;
+	border: 1px solid var(--p-line); border-radius: 24px; background: var(--p-panel); color: var(--p-text);
+}
+.presence-preview::backdrop { background: rgba(5, 5, 6, 0.78); backdrop-filter: blur(4px); }
+.presence-preview__close {
+	position: absolute; top: 14px; right: 14px; z-index: 2; width: 44px; height: 44px; display: grid; place-items: center;
+	border: 0; border-radius: 50%; background: rgba(14, 14, 15, 0.72); color: #fff; cursor: pointer;
+}
+.presence-preview__close:hover { background: var(--red); }
+.presence-preview__panel { display: grid; grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr); }
+.presence-preview__panel[hidden] { display: none; }
+.presence-preview__media { position: relative; min-height: 560px; background: var(--p-card); }
+.presence-preview__media video,
+.presence-preview__media img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 50% 18%; }
+.presence-preview__body { padding: clamp(24px, 3vw, 36px); }
+.presence-preview__tabs { display: inline-flex; gap: 4px; margin: 0 56px 20px 0; padding: 4px; border-radius: 999px; background: var(--p-card); }
+.presence-preview__tab {
+	min-height: 36px; padding: 0 16px; border: 0; border-radius: 999px; background: transparent; color: var(--p-muted);
+	font-family: var(--font-ui); font-weight: 600; font-size: 14px; cursor: pointer;
+}
+.presence-preview__tab[aria-pressed="true"] { background: var(--p-text); color: var(--p-bg); }
+.presence-preview__name { font-size: clamp(28px, 3vw, 36px); font-weight: 600; color: #fff; }
+.presence-preview__role { margin: 4px 0 12px; font-family: var(--font-ui); font-size: 14.5px; font-weight: 500; color: #fff; }
+.presence-preview__role span { color: var(--p-muted); font-weight: 400; }
+.presence-preview__tone { margin: 12px 0 0; font-size: 14.5px; color: var(--p-muted); }
+.presence-preview__label { margin-top: 22px; font-family: var(--font-ui); font-size: 13px; font-weight: 600; color: var(--p-muted); }
+.presence-chat { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 8px; }
+.presence-chat__line {
+	max-width: 88%; padding: 10px 14px; border-radius: 16px; font-size: 14.5px; line-height: 1.45;
+	animation: presence-chat-in .35s ease both;
+}
+.presence-chat__line:nth-child(2) { animation-delay: .5s; }
+.presence-chat__line:nth-child(3) { animation-delay: 1s; }
+.presence-chat__line--agent { justify-self: start; background: var(--p-card); color: #e4e4e7; border-bottom-left-radius: 4px; }
+.presence-chat__line--visitor { justify-self: end; background: var(--red); color: #fff; border-bottom-right-radius: 4px; }
+@keyframes presence-chat-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+.presence-preview__actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 24px; }
+@media (max-width: 760px) {
+	.presence-preview__panel { grid-template-columns: 1fr; }
+	.presence-preview__media { min-height: 0; aspect-ratio: 4 / 3; }
+	.presence-preview__actions .btn { width: 100%; justify-content: center; }
+}
+@media (prefers-reduced-motion: reduce) {
+	.presence-chat__line { animation: none; }
+}
+
+/* ---- Footer ------------------------------------------------------------ */
+.presence-foot { margin-top: clamp(48px, 8vh, 96px); padding: 24px 0 96px; border-top: 1px solid var(--p-line); font-size: 14px; color: var(--p-muted); }
+.presence-foot__inner { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 24px; }
+.presence-foot__links { display: flex; flex-wrap: wrap; gap: 8px 20px; }
+.presence-foot a { color: var(--p-text); }
+.presence-foot a:hover { color: var(--red); }
+
+/* ---- Sign-up summary --------------------------------------------------- */
+.presence-summary { margin-top: 24px; padding: 16px; border-radius: 18px; background: var(--p-panel); border: 1px solid var(--p-line); }
+.presence-summary__persona { display: flex; align-items: center; gap: 14px; }
+.presence-summary__persona[hidden],
+.presence-summary__plan[hidden] { display: none; }
+.presence-summary__persona img { width: 72px; height: 72px; flex: none; border-radius: 16px; object-fit: cover; object-position: 50% 18%; }
+.presence-summary__persona .presence-card__plus { flex: none; margin: 0; }
+.presence-summary__persona strong { display: block; font-size: 18px; color: #fff; }
+.presence-summary__persona span { font-size: 14px; color: var(--p-muted); }
+.presence-summary__plan { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 14px 0 0; padding-top: 14px; border-top: 1px solid var(--p-line); font-size: 14.5px; color: #d4d4d8; }
+.presence-summary__plan strong { font-size: 20px; color: #fff; white-space: nowrap; }
 
 /* ---- Sign-up page (templates/template-presence-signup.php) ------------ */
 .presence-signup__wrap { display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); gap: clamp(28px, 5vw, 72px); align-items: start; }

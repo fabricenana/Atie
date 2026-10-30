@@ -47,6 +47,31 @@ while ( have_posts() ) :
 					<span class="presence-kicker"><?php esc_html_e( 'Inscription', 'atie' ); ?></span>
 					<h1 class="presence-welcome__title"><?php the_title(); ?></h1>
 					<p class="presence-welcome__lead"><?php esc_html_e( 'Dites-nous en quelques lignes qui vous êtes et ce que votre réceptionniste doit savoir. Nous vous répondons sous un jour ouvrable avec la mise en place et l’accès à votre espace client.', 'atie' ); ?></p>
+					<?php if ( 'ok' !== $status ) : ?>
+						<div class="presence-summary" aria-live="polite">
+							<?php foreach ( atie_presence_personas() as $summary ) : ?>
+								<div class="presence-summary__persona" data-summary-persona="<?php echo esc_attr( $summary['id'] ); ?>"<?php echo $persona === $summary['id'] ? '' : ' hidden'; ?>>
+									<?php if ( $summary['image'] ) : ?>
+										<img src="<?php echo esc_url( $summary['image'] ); ?>" alt="" width="72" height="72">
+									<?php endif; ?>
+									<span><strong><?php echo esc_html( $summary['name'] ); ?></strong> <?php echo esc_html( $summary['role'] ); ?></span>
+								</div>
+							<?php endforeach; ?>
+							<div class="presence-summary__persona" data-summary-persona="sur-mesure"<?php echo 'sur-mesure' === $persona ? '' : ' hidden'; ?>>
+								<span class="presence-card__plus" aria-hidden="true">+</span>
+								<span><strong><?php esc_html_e( 'Sur mesure', 'atie' ); ?></strong> <?php esc_html_e( 'Votre visage de marque et votre voix', 'atie' ); ?></span>
+							</div>
+							<?php foreach ( atie_presence_plans()['plans'] as $summary ) : ?>
+								<p class="presence-summary__plan" data-summary-plan="<?php echo esc_attr( sanitize_key( $summary['name'] ) ); ?>"<?php echo sanitize_key( $summary['name'] ) === $plan ? '' : ' hidden'; ?>>
+									<span><?php echo esc_html( $summary['name'] ); ?> · <?php echo esc_html( sprintf( /* translators: %d: minutes per month */ __( '%d min par mois', 'atie' ), $summary['minutes'] ) ); ?></span>
+									<strong>CHF <?php echo esc_html( $summary['price'] ); ?></strong>
+								</p>
+							<?php endforeach; ?>
+							<p class="presence-summary__plan" data-summary-plan="conseil"<?php echo 'conseil' === $plan ? '' : ' hidden'; ?>>
+								<span><?php esc_html_e( 'Formule à définir avec vous', 'atie' ); ?></span>
+							</p>
+						</div>
+					<?php endif; ?>
 					<ol class="presence-signup__steps">
 						<li><?php esc_html_e( 'Vous envoyez cette demande (sans engagement).', 'atie' ); ?></li>
 						<li><?php esc_html_e( 'Nous préparons votre réceptionniste avec vos informations.', 'atie' ); ?></li>
@@ -164,6 +189,7 @@ while ( have_posts() ) :
 				</div>
 			</div>
 		</section>
+		<?php get_template_part( 'template-parts/presence-footer' ); ?>
 	</div>
 
 	<?php

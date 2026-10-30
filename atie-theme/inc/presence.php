@@ -6,7 +6,7 @@
  * only when live trials are switched on (Customizer → ATIE Presence): visitors
  * then talk for one minute with Léa or Maya through the ATIE API (quota per
  * visitor and per day, enforced server side). Switched off: no widget, the
- * page shows the receptionists and leads to the contact page.
+ * page shows a preview of each receptionist and leads to the sign-up page.
  *
  * @package ATIE
  */
@@ -48,6 +48,11 @@ function atie_presence_personas() {
 			'tone'      => __( 'Chaleureuse et rassurante, phrases courtes.', 'atie' ),
 			'languages' => array( 'FR', 'DE', 'IT', 'EN' ),
 			'greeting'  => __( 'Horaires, premier rendez-vous, urgences : elle oriente le patient et passe la main au secrétariat.', 'atie' ),
+			'sample'    => array(
+				__( 'Bonjour, je suis Léa, la réceptionniste virtuelle du cabinet. Comment puis-je vous aider ?', 'atie' ),
+				__( 'J’ai mal à une dent depuis hier soir. Vous pouvez me prendre rapidement ?', 'atie' ),
+				__( 'Je comprends. Pour une douleur, le cabinet garde des créneaux d’urgence. Je préviens le secrétariat pour qu’il vous rappelle : quel est votre numéro ?', 'atie' ),
+			),
 		),
 		array(
 			'id'        => 'maya',
@@ -60,6 +65,11 @@ function atie_presence_personas() {
 			'tone'      => __( 'Courtoise et enjouée, sens de l’accueil.', 'atie' ),
 			'languages' => array( 'FR', 'DE', 'IT', 'EN' ),
 			'greeting'  => __( 'Arrivée, petit-déjeuner, activités autour du lac : elle renseigne le client à toute heure.', 'atie' ),
+			'sample'    => array(
+				__( 'Bienvenue à l’Hôtel Chalet du Lac, je suis Maya, votre réceptionniste virtuelle. Que puis-je faire pour vous ?', 'atie' ),
+				__( 'Nous arrivons tard samedi soir, vers 23 heures. C’est possible ?', 'atie' ),
+				__( 'Bien sûr. Je transmets votre heure d’arrivée à la réception pour qu’elle prépare votre accueil. À quel nom est la réservation ?', 'atie' ),
+			),
 		),
 	);
 
@@ -142,7 +152,7 @@ function atie_presence_customize_register( $wp_customize ) {
 			'type'        => 'checkbox',
 			'section'     => 'atie_presence',
 			'label'       => __( 'Essais en direct (1 minute, micro)', 'atie' ),
-			'description' => __( 'Les visiteurs parlent une minute avec Léa ou Maya. Chaque essai est facturé par LiveKit et LemonSlice : quotas par visiteur et par jour sur le serveur. Décoché : aucun essai, la page mène au contact.', 'atie' ),
+			'description' => __( 'Les visiteurs parlent une minute avec Léa ou Maya. Chaque essai est facturé par LiveKit et LemonSlice : quotas par visiteur et par jour sur le serveur. Décoché : aucun essai, la page montre un aperçu de chaque réceptionniste.', 'atie' ),
 		)
 	);
 
@@ -179,13 +189,8 @@ function atie_presence_assets() {
 	}
 
 	wp_enqueue_style( 'atie-presence', ATIE_URI . '/assets/css/presence.css', array( 'atie-main' ), ATIE_VERSION );
-	// Reduced motion: card videos stay still (with or without live trials).
-	wp_register_script( 'atie-presence-page', false, array(), ATIE_VERSION, array( 'in_footer' => true ) );
-	wp_enqueue_script( 'atie-presence-page' );
-	wp_add_inline_script(
-		'atie-presence-page',
-		"(function(){if(window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches)document.querySelectorAll('.presence-card video, .presence-bubble video').forEach(function(v){v.removeAttribute('autoplay');v.pause();});})();"
-	);
+	// Receptionist preview dialog, reduced motion (with or without live trials).
+	wp_enqueue_script( 'atie-presence-page', ATIE_URI . '/assets/js/presence-page.js', array(), ATIE_VERSION, array( 'in_footer' => true ) );
 
 	if ( ! atie_presence_trials_enabled() ) {
 		return;
